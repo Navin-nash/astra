@@ -1,0 +1,84 @@
+# ─── Claude / AI tooling ─────────────────────────────────────────────────────
+.claude/
+.superpowers/
+.agents/
+
+# ─── Environment & secrets ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─── Next.js (web/) ───────────────────────────────────────────────────────────
+web/.next/
+web/out/
+web/build/
+web/node_modules/
+web/coverage/
+web/.pnp
+web/.pnp.*
+web/.yarn/*
+!web/.yarn/patches
+!web/.yarn/plugins
+!web/.yarn/releases
+!web/.yarn/versions
+web/*.tsbuildinfo
+web/next-env.d.ts
+web/.vercel
+
+# ─── Node / npm ───────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.pnpm-store/
+
+# ─── Rust / Cargo (api/) ──────────────────────────────────────────────────────
+api/target/
+target/
+
+# Cargo lock is intentionally kept for apps (remove the line if this is a library)
+# Cargo.lock
+
+# Compiled artifacts & build caches
+**/*.rs.bk
+**/*.pdb
+**/*.exe
+**/*.dll
+**/*.so
+**/*.dylib
+**/*.d
+
+# Rust coverage / profiling data (can contain source mappings)
+**/*.profraw
+**/*.profdata
+lcov.info
+
+# cargo-audit / cargo-deny advisories cache (auto-regenerated)
+.cargo-audit-cache/
+
+# sqlx offline query cache – keep in VCS if desired, but exclude if it leaks schema
+# .sqlx/
+
+# ─── Docker ───────────────────────────────────────────────────────────────────
+docker-compose.override.yml
+
+# ─── OS noise ─────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Editor / IDE ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ─── Misc ─────────────────────────────────────────────────────────────────────
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+dist/
