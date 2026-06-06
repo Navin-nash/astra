@@ -10,8 +10,6 @@ export const auth = betterAuth({
   // Generate a secret: openssl rand -base64 32
 
   // ─── Database ─────────────────────────────────────────────────────────────
-  // Spread the entire auth-schema so adding new plugins (which regenerate
-  // auth-schema.ts via `npm run auth:generate`) works without touching this file.
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: authSchema,
@@ -27,6 +25,24 @@ export const auth = betterAuth({
       // repo scope required to list private repositories
       scope: ["read:user", "user:email", "repo"],
     },
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    },
+  },
+
+  // ─── Extended user fields ─────────────────────────────────────────────────
+  // github_username is added via migration 004_github_username.sql.
+  // Declared here so Better Auth includes it in session/user inference.
+  user: {
+    additionalFields: {
+      githubUsername: {
+        type: "string",
+        required: false,
+        defaultValue: null,
+        input: true,
+      },
+    },
   },
 
   // ─── Session ──────────────────────────────────────────────────────────────
@@ -35,8 +51,8 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24,        // refresh once per day
     cookieCache: {
       enabled: true,
-      maxAge: 60 * 5,               // re-validate against DB every 5 min
-      strategy: "jwe",              // AES-256-GCM encrypted cookie — most secure
+      maxAge: 60 * 5,
+      strategy: "jwe",
     },
   },
 
@@ -45,15 +61,11 @@ export const auth = betterAuth({
     accountLinking: {
       enabled: true,
     },
-    // NOTE: encryptOAuthTokens is intentionally disabled.
-    // We query `account.accessToken` directly via Drizzle in github.ts.
-    // Enabling encryption would return ciphertext from raw Drizzle queries.
-    // To enable, migrate getGithubToken() to use auth.api.listAccounts() instead.
+    // NOTE: encryptOAuthTokens intentionally disabled.
+    // We query account.accessToken directly via Drizzle in github.ts.
   },
 
   // ─── Rate limiting ────────────────────────────────────────────────────────
-  // Uses "database" storage so limits persist across serverless restarts.
-  // Sensitive auth endpoints get tighter per-endpoint windows.
   rateLimit: {
     enabled: true,
     storage: "database",
@@ -62,21 +74,17 @@ export const auth = betterAuth({
     customRules: {
       "/api/auth/sign-in/social": { window: 60, max: 10 },
       "/api/auth/callback/github": { window: 60, max: 10 },
+      "/api/auth/callback/google": { window: 60, max: 10 },
     },
   },
 
   // ─── Trusted origins ─────────────────────────────────────────────────────
-  // BETTER_AUTH_URL origin is trusted automatically.
-  // Add extra origins (staging, preview URLs) via BETTER_AUTH_TRUSTED_ORIGINS
-  // env var (comma-separated) — Better Auth reads this natively.
   trustedOrigins: process.env.ALLOWED_ORIGINS?.split(",").filter(Boolean) ?? [],
 
   // ─── Security ─────────────────────────────────────────────────────────────
   advanced: {
     useSecureCookies: process.env.NODE_ENV === "production",
     cookiePrefix: "astra",
-    // disableCSRFCheck: false — NEVER change this
-    // disableOriginCheck: false — NEVER change this
   },
 })
 

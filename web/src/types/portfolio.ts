@@ -57,3 +57,20 @@ export interface GithubRepo {
   archived: boolean
   updated_at: string
 }
+
+export type RepoSource = "own" | "org" | "contribution"
+
+export interface GithubContribution {
+  id: number
+  title: string
+  html_url: string
+  repo_full_name: string
+  repo_html_url: string
+  merged_at: string
+  state: "merged"
+  labels: string[]
+}
+
+export interface OrgRepo extends GithubRepo {
+  org_name: string
+}

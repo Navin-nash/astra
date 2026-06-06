@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import type { GithubRepo, TemplateId } from "@/types/portfolio"
+import type { GithubRepo, OrgRepo, GithubContribution, TemplateId } from "@/types/portfolio"
 import { TemplatePicker } from "@/components/portfolio/template-selector"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -19,7 +19,9 @@ const PAGE_SIZE = 10
 type SortKey = "updated" | "stars" | "name"
 
 interface RepoSelectorProps {
-  repos: GithubRepo[]
+  ownRepos: GithubRepo[]
+  orgRepos: OrgRepo[]
+  contributions: GithubContribution[]
   onGenerate: (repoIds: number[], template: TemplateId) => Promise<void>
 }
 
@@ -42,7 +44,7 @@ const SORT_LABELS: Record<SortKey, string> = {
   name: "Name A–Z",
 }
 
-export function RepoSelector({ repos, onGenerate }: RepoSelectorProps) {
+export function RepoSelector({ ownRepos, orgRepos, contributions, onGenerate }: RepoSelectorProps) {
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [template, setTemplate] = useState<TemplateId>("void")
   const [loading, setLoading] = useState(false)
@@ -50,23 +52,35 @@ export function RepoSelector({ repos, onGenerate }: RepoSelectorProps) {
   const [sort, setSort] = useState<SortKey>("updated")
   const [page, setPage] = useState(0)
 
+  // Group org repos by org name for display
+  const orgGroups = useMemo(() => {
+    const groups: Record<string, OrgRepo[]> = {}
+    for (const repo of orgRepos) {
+      if (!groups[repo.org_name]) groups[repo.org_name] = []
+      groups[repo.org_name].push(repo)
+    }
+    return groups
+  }, [orgRepos])
+
+  const allSelectableRepos = useMemo(() => [...ownRepos, ...orgRepos], [ownRepos, orgRepos])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     const list = q
-      ? repos.filter(
+      ? ownRepos.filter(
           (r) =>
             r.name.toLowerCase().includes(q) ||
             r.description?.toLowerCase().includes(q) ||
             r.language?.toLowerCase().includes(q)
         )
-      : repos
+      : ownRepos
 
     return [...list].sort((a, b) => {
       if (sort === "stars") return b.stargazers_count - a.stargazers_count
       if (sort === "name") return a.name.localeCompare(b.name)
       return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
     })
-  }, [repos, search, sort])
+  }, [ownRepos, search, sort])
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
   const safePage = Math.min(page, Math.max(0, totalPages - 1))
@@ -101,11 +115,12 @@ export function RepoSelector({ repos, onGenerate }: RepoSelectorProps) {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
+
+      {/* ── Own repos ─────────────────────────────────────────────────────── */}
       <div>
-        {/* Header row */}
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-foreground">Select repositories</h2>
+          <h2 className="text-sm font-medium text-foreground">Your repositories</h2>
           <div className="flex items-center gap-3">
             <span className="text-xs text-muted-foreground">
               {selected.size > 0 ? (
@@ -127,13 +142,7 @@ export function RepoSelector({ repos, onGenerate }: RepoSelectorProps) {
                   aria-label="Previous page"
                 >
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                    <path
-                      d="M6.5 2L3.5 5L6.5 8"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
+                    <path d="M6.5 2L3.5 5L6.5 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </Button>
                 <span className="w-12 text-center text-xs tabular-nums text-muted-foreground">
@@ -148,13 +157,7 @@ export function RepoSelector({ repos, onGenerate }: RepoSelectorProps) {
                   aria-label="Next page"
                 >
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                    <path
-                      d="M3.5 2L6.5 5L3.5 8"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
+                    <path d="M3.5 2L6.5 5L3.5 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </Button>
               </div>
@@ -162,23 +165,12 @@ export function RepoSelector({ repos, onGenerate }: RepoSelectorProps) {
           </div>
         </div>
 
-        {/* Search + sort row */}
+        {/* Search + sort */}
         <div className="mb-3 flex items-center gap-2">
           <div className="relative flex-1">
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 13 13"
-              fill="none"
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-            >
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
               <circle cx="5.5" cy="5.5" r="4" stroke="currentColor" strokeWidth="1.25" />
-              <path
-                d="M8.5 8.5L11 11"
-                stroke="currentColor"
-                strokeWidth="1.25"
-                strokeLinecap="round"
-              />
+              <path d="M8.5 8.5L11 11" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
             </svg>
             <Input
               value={search}
@@ -193,12 +185,7 @@ export function RepoSelector({ repos, onGenerate }: RepoSelectorProps) {
                 aria-label="Clear search"
               >
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <path
-                    d="M2 2L8 8M8 2L2 8"
-                    stroke="currentColor"
-                    strokeWidth="1.25"
-                    strokeLinecap="round"
-                  />
+                  <path d="M2 2L8 8M8 2L2 8" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
                 </svg>
               </button>
             )}
@@ -207,49 +194,22 @@ export function RepoSelector({ repos, onGenerate }: RepoSelectorProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-1.5 whitespace-nowrap text-xs">
-                <svg
-                  width="11"
-                  height="11"
-                  viewBox="0 0 11 11"
-                  fill="none"
-                  className="shrink-0 text-muted-foreground"
-                >
-                  <path
-                    d="M1 3h9M3 5.5h5M5 8h1"
-                    stroke="currentColor"
-                    strokeWidth="1.25"
-                    strokeLinecap="round"
-                  />
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none" className="shrink-0 text-muted-foreground">
+                  <path d="M1 3h9M3 5.5h5M5 8h1" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
                 </svg>
                 {SORT_LABELS[sort]}
                 <svg width="9" height="9" viewBox="0 0 9 9" fill="none" className="text-muted-foreground">
-                  <path
-                    d="M1.5 3L4.5 6.5L7.5 3"
-                    stroke="currentColor"
-                    strokeWidth="1.25"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  <path d="M1.5 3L4.5 6.5L7.5 3" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
               {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
-                <DropdownMenuItem
-                  key={k}
-                  onClick={() => handleSort(k)}
-                  className="justify-between text-xs"
-                >
+                <DropdownMenuItem key={k} onClick={() => handleSort(k)} className="justify-between text-xs">
                   {SORT_LABELS[k]}
                   {sort === k && (
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                      <path
-                        d="M2 5L4.5 7.5L8.5 2.5"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
+                      <path d="M2 5L4.5 7.5L8.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   )}
                 </DropdownMenuItem>
@@ -260,93 +220,15 @@ export function RepoSelector({ repos, onGenerate }: RepoSelectorProps) {
 
         {/* Repo rows */}
         {pageRepos.length === 0 ? (
-          <p className="py-8 text-center text-xs text-muted-foreground">
-            No repositories match your search.
-          </p>
+          <p className="py-8 text-center text-xs text-muted-foreground">No repositories match your search.</p>
         ) : (
           <div className="space-y-1.5">
-            {pageRepos.map((repo) => {
-              const isSelected = selected.has(repo.id)
-              return (
-                <div
-                  key={repo.id}
-                  role="checkbox"
-                  aria-checked={isSelected}
-                  tabIndex={0}
-                  onClick={() => toggle(repo.id)}
-                  onKeyDown={(e) =>
-                    (e.key === " " || e.key === "Enter") && toggle(repo.id)
-                  }
-                  className={`group flex cursor-pointer items-start gap-4 rounded-xl border p-4 text-left transition-all ${
-                    isSelected
-                      ? "border-brand/40 bg-brand-muted"
-                      : "border-border hover:border-muted-foreground/30 hover:bg-muted/30"
-                  }`}
-                >
-                  <Checkbox
-                    checked={isSelected}
-                    className="pointer-events-none mt-0.5 shrink-0"
-                    tabIndex={-1}
-                  />
-
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-foreground">{repo.name}</span>
-
-                      {repo.private && (
-                        <Badge variant="outline" className="px-1.5 py-0.5 text-[10px]">
-                          private
-                        </Badge>
-                      )}
-
-                      {repo.language && (
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <span
-                            className="inline-block h-2 w-2 shrink-0 rounded-full"
-                            style={{ background: LANG_COLORS[repo.language] ?? "currentColor" }}
-                          />
-                          {repo.language}
-                        </span>
-                      )}
-
-                      {repo.stargazers_count > 0 && (
-                        <span className="text-xs text-muted-foreground">
-                          ★ {repo.stargazers_count}
-                        </span>
-                      )}
-
-                      <span className="ml-auto text-[10px] text-muted-foreground/60">
-                        {formatRelative(repo.updated_at)}
-                      </span>
-                    </div>
-
-                    {repo.description && (
-                      <p className="line-clamp-2 text-xs leading-snug text-muted-foreground">
-                        {repo.description}
-                      </p>
-                    )}
-
-                    {repo.topics.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {repo.topics.slice(0, 4).map((t) => (
-                          <Badge
-                            key={t}
-                            variant="outline"
-                            className="rounded-full px-2 py-0.5 text-[10px] text-muted-foreground"
-                          >
-                            {t}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
+            {pageRepos.map((repo) => (
+              <RepoRow key={repo.id} repo={repo} selected={selected.has(repo.id)} onToggle={toggle} />
+            ))}
           </div>
         )}
 
-        {/* Bottom pagination */}
         {totalPages > 1 && (
           <div className="mt-3 flex items-center justify-between">
             <span className="text-xs text-muted-foreground">
@@ -354,38 +236,14 @@ export function RepoSelector({ repos, onGenerate }: RepoSelectorProps) {
               {filtered.length} repos
             </span>
             <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                disabled={safePage === 0}
-              >
+              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={safePage === 0}>
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <path
-                    d="M6.5 2L3.5 5L6.5 8"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  <path d="M6.5 2L3.5 5L6.5 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                disabled={safePage >= totalPages - 1}
-              >
+              <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={safePage >= totalPages - 1}>
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <path
-                    d="M3.5 2L6.5 5L3.5 8"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  <path d="M3.5 2L6.5 5L3.5 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </Button>
             </div>
@@ -393,13 +251,80 @@ export function RepoSelector({ repos, onGenerate }: RepoSelectorProps) {
         )}
       </div>
 
-      {/* Template picker */}
+      {/* ── Organisation repos ─────────────────────────────────────────────── */}
+      {orgRepos.length > 0 && (
+        <div>
+          <h2 className="mb-4 text-sm font-medium text-foreground">Organisation repositories</h2>
+          <div className="space-y-4">
+            {Object.entries(orgGroups).map(([orgName, repos]) => (
+              <div key={orgName}>
+                <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  {orgName}
+                </p>
+                <div className="space-y-1.5">
+                  {repos.map((repo) => (
+                    <RepoRow key={repo.id} repo={repo} selected={selected.has(repo.id)} onToggle={toggle} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Open source contributions ──────────────────────────────────────── */}
+      {contributions.length > 0 && (
+        <div>
+          <div className="mb-4 flex items-center gap-2">
+            <h2 className="text-sm font-medium text-foreground">Open source contributions</h2>
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 text-muted-foreground">
+              {contributions.length}
+            </Badge>
+          </div>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Merged PRs in other projects — included automatically in your portfolio.
+          </p>
+          <div className="space-y-1.5">
+            {contributions.slice(0, 10).map((c) => (
+              <a
+                key={c.id}
+                href={c.html_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-start gap-3 rounded-xl border border-border p-4 hover:border-muted-foreground/30 hover:bg-muted/30 transition-all"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="mt-0.5 shrink-0 text-green-500">
+                  <path d="M5.45 5.154A4.25 4.25 0 0 0 9.25 12a.75.75 0 0 1 0 1.5A5.75 5.75 0 1 1 10.72 3.06l.63-.63a.75.75 0 0 1 1.28.53v3.5a.75.75 0 0 1-.75.75h-3.5a.75.75 0 0 1-.53-1.28l.72-.72A4.252 4.252 0 0 0 5.45 5.154Z" />
+                </svg>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-foreground line-clamp-1">{c.title}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{c.repo_full_name}</p>
+                  {c.labels.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {c.labels.slice(0, 3).map((l) => (
+                        <Badge key={l} variant="outline" className="rounded-full px-1.5 py-0.5 text-[10px]">
+                          {l}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <span className="shrink-0 text-[10px] text-muted-foreground/60">
+                  {formatRelative(c.merged_at)}
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Template picker ────────────────────────────────────────────────── */}
       <div>
         <h2 className="mb-4 text-sm font-medium text-foreground">Choose a template</h2>
         <TemplatePicker value={template} onChange={setTemplate} />
       </div>
 
-      {/* Generate CTA */}
+      {/* ── Generate CTA ──────────────────────────────────────────────────── */}
       <button
         onClick={handleGenerate}
         disabled={selected.size === 0 || loading}
@@ -411,6 +336,85 @@ export function RepoSelector({ repos, onGenerate }: RepoSelectorProps) {
           ? "Select at least 1 repository"
           : `Generate portfolio from ${selected.size} repo${selected.size > 1 ? "s" : ""}`}
       </button>
+    </div>
+  )
+}
+
+// ─── Shared repo row ──────────────────────────────────────────────────────
+
+function RepoRow({
+  repo,
+  selected,
+  onToggle,
+}: {
+  repo: GithubRepo
+  selected: boolean
+  onToggle: (id: number) => void
+}) {
+  return (
+    <div
+      role="checkbox"
+      aria-checked={selected}
+      tabIndex={0}
+      onClick={() => onToggle(repo.id)}
+      onKeyDown={(e) => (e.key === " " || e.key === "Enter") && onToggle(repo.id)}
+      className={`group flex cursor-pointer items-start gap-4 rounded-xl border p-4 text-left transition-all ${
+        selected
+          ? "border-brand/40 bg-brand-muted"
+          : "border-border hover:border-muted-foreground/30 hover:bg-muted/30"
+      }`}
+    >
+      <Checkbox
+        checked={selected}
+        className="pointer-events-none mt-0.5 shrink-0"
+        tabIndex={-1}
+      />
+
+      <div className="min-w-0 flex-1">
+        <div className="mb-1 flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-foreground">{repo.name}</span>
+
+          {repo.private && (
+            <Badge variant="outline" className="px-1.5 py-0.5 text-[10px]">
+              private
+            </Badge>
+          )}
+
+          {repo.language && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <span
+                className="inline-block h-2 w-2 shrink-0 rounded-full"
+                style={{ background: LANG_COLORS[repo.language] ?? "currentColor" }}
+              />
+              {repo.language}
+            </span>
+          )}
+
+          {repo.stargazers_count > 0 && (
+            <span className="text-xs text-muted-foreground">★ {repo.stargazers_count}</span>
+          )}
+
+          <span className="ml-auto text-[10px] text-muted-foreground/60">
+            {formatRelative(repo.updated_at)}
+          </span>
+        </div>
+
+        {repo.description && (
+          <p className="line-clamp-2 text-xs leading-snug text-muted-foreground">
+            {repo.description}
+          </p>
+        )}
+
+        {repo.topics.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {repo.topics.slice(0, 4).map((t) => (
+              <Badge key={t} variant="outline" className="rounded-full px-2 py-0.5 text-[10px] text-muted-foreground">
+                {t}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

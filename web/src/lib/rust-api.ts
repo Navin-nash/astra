@@ -63,11 +63,21 @@ async function getSessionOrThrow() {
   return session
 }
 
+export interface ContributionInput {
+  title: string
+  html_url: string
+  repo_full_name: string
+  repo_html_url: string
+  merged_at: string
+  labels: string[]
+}
+
 interface GenerateOptions {
   template?: string
   user_id: string
   username: string
   avatar_url?: string
+  contributions?: ContributionInput[]
 }
 
 export async function startGeneration(
@@ -93,6 +103,7 @@ export async function startGeneration(
       avatar_url: opts?.avatar_url ?? user.image,
       theme_config: opts?.template ? { template: opts.template } : { template: "void" },
       repos,
+      contributions: opts?.contributions ?? [],
     }),
     cache: "no-store",
   })

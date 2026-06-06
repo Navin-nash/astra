@@ -2,7 +2,7 @@ import { redirect } from "next/navigation"
 import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
 import { AstraLogo } from "@/components/ui/astra-logo"
-import { LoginButton } from "./login-button"
+import { AuthButtons } from "./login-button"
 
 export default async function LoginPage() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -27,15 +27,15 @@ export default async function LoginPage() {
               Sign in to Astra
             </h1>
             <p className="text-sm text-muted-foreground">
-              Connect your GitHub account to get started.
+              Choose how you want to sign in.
             </p>
           </div>
 
-          <LoginButton />
+          <AuthButtons />
 
           <p className="text-xs leading-relaxed text-muted-foreground/70">
-            We request read access to your public repositories. We never modify
-            your code or store your credentials.
+            GitHub sign-in grants access to private repositories. Google
+            sign-in only accesses your public GitHub profile.
           </p>
         </div>
       </div>

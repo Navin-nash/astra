@@ -1,7 +1,7 @@
 import { eq, and } from "drizzle-orm"
 import { db } from "./db"
-import { baAccount } from "./schema"
-import type { GithubRepo } from "@/types/portfolio"
+import { baAccount, baUser } from "./schema"
+import type { GithubRepo, GithubContribution, OrgRepo } from "@/types/portfolio"
 
 const GITHUB_API = "https://api.github.com"
 
@@ -21,6 +21,42 @@ async function getGithubToken(userId: string): Promise<string> {
   const token = account?.accessToken
   if (!token) throw new Error("GitHub account not linked or token missing")
   return token
+}
+
+interface GithubProfile {
+  login: string
+  avatar_url: string
+}
+
+/**
+ * For GitHub OAuth users: fetches /user to get the GitHub login, then
+ * persists it to user.github_username if not yet set. Returns the login.
+ */
+export async function resolveAndPersistGithubUsername(
+  userId: string
+): Promise<string | null> {
+  const account = await db.query.baAccount.findFirst({
+    where: and(eq(baAccount.userId, userId), eq(baAccount.providerId, "github")),
+    columns: { accessToken: true },
+  })
+  if (!account?.accessToken) return null
+
+  const profile = await ghFetch<GithubProfile>("/user", account.accessToken)
+  if (!profile.login) return null
+
+  const user = await db.query.baUser.findFirst({
+    where: eq(baUser.id, userId),
+    columns: { githubUsername: true } as never,
+  })
+
+  if (!(user as unknown as { githubUsername: string | null })?.githubUsername) {
+    await db
+      .update(baUser)
+      .set({ githubUsername: profile.login } as never)
+      .where(eq(baUser.id, userId))
+  }
+
+  return profile.login
 }
 
 async function ghFetch<T>(path: string, token: string, retries = 3): Promise<T> {
@@ -190,4 +226,163 @@ export async function fetchRepoContent(userId: string, repo: GithubRepo) {
     dependencyFile: !isJsTs ? depFileContent : null,
     sourceFiles,
   }
+}
+
+// ─── Public-mode fetch (no user OAuth token) ────────────────────────────────
+// Uses a server-side PAT from GITHUB_PUBLIC_TOKEN env var for 5000 req/hr
+// instead of 60/hr for fully unauthenticated requests.
+
+function publicGhHeaders(): Record<string, string> {
+  const hdrs: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "astra-web/0.1",
+  }
+  if (process.env.GITHUB_PUBLIC_TOKEN) {
+    hdrs["Authorization"] = `Bearer ${process.env.GITHUB_PUBLIC_TOKEN}`
+  }
+  return hdrs
+}
+
+async function publicGhFetch<T>(path: string, retries = 3): Promise<T> {
+  let lastError: Error | undefined
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const res = await fetch(`${GITHUB_API}${path}`, {
+      headers: publicGhHeaders(),
+      cache: "no-store",
+    })
+    if (res.status === 429 || (res.status >= 500 && res.status < 600)) {
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 1000))
+        continue
+      }
+    }
+    if (!res.ok) throw new Error(`GitHub public API ${path} → ${res.status}`)
+    return res.json() as Promise<T>
+  }
+  throw lastError ?? new Error(`GitHub public API ${path} failed`)
+}
+
+/** Fetches all non-archived, non-fork public repos for a GitHub username. */
+export async function listPublicUserRepos(githubUsername: string): Promise<GithubRepo[]> {
+  const all: GithubRepo[] = []
+  let page = 1
+  while (true) {
+    const batch = await publicGhFetch<GithubRepo[]>(
+      `/users/${githubUsername}/repos?per_page=100&sort=updated&type=public&page=${page}`
+    )
+    all.push(...batch)
+    if (batch.length < 100) break
+    page++
+  }
+  return all.filter((r) => !r.archived && !r.fork)
+}
+
+interface GithubOrg {
+  login: string
+}
+
+async function listUserOrgsAuthenticated(token: string): Promise<GithubOrg[]> {
+  return ghFetch<GithubOrg[]>("/user/orgs?per_page=100", token)
+}
+
+async function listUserOrgsPublic(githubUsername: string): Promise<GithubOrg[]> {
+  return publicGhFetch<GithubOrg[]>(`/users/${githubUsername}/orgs?per_page=100`)
+}
+
+async function fetchOrgPublicRepos(orgLogin: string): Promise<GithubRepo[]> {
+  const all: GithubRepo[] = []
+  let page = 1
+  while (true) {
+    const batch = await publicGhFetch<GithubRepo[]>(
+      `/orgs/${orgLogin}/repos?per_page=100&sort=updated&type=public&page=${page}`
+    )
+    all.push(...batch)
+    if (batch.length < 100) break
+    page++
+  }
+  return all.filter((r) => !r.archived)
+}
+
+/**
+ * Returns public repos from all orgs the user belongs to.
+ * Uses OAuth token if available for higher rate limits, otherwise public username.
+ */
+export async function listOrgRepos(
+  userId: string,
+  githubUsername: string
+): Promise<OrgRepo[]> {
+  let orgs: GithubOrg[]
+  try {
+    const token = await getGithubToken(userId).catch(() => null)
+    orgs = token
+      ? await listUserOrgsAuthenticated(token)
+      : await listUserOrgsPublic(githubUsername)
+  } catch {
+    return []
+  }
+  if (orgs.length === 0) return []
+
+  const orgRepoSets = await Promise.all(
+    orgs.map(async (org) => {
+      const repos = await fetchOrgPublicRepos(org.login).catch(
+        () => [] as GithubRepo[]
+      )
+      return repos.map((r) => ({ ...r, org_name: org.login }))
+    })
+  )
+  return orgRepoSets.flat()
+}
+
+interface SearchIssue {
+  id: number
+  title: string
+  html_url: string
+  pull_request?: { merged_at: string | null }
+  repository_url: string
+  labels: Array<{ name: string }>
+}
+
+interface SearchResult {
+  items: SearchIssue[]
+}
+
+/**
+ * Returns merged PRs authored by the user in repos they don't own.
+ * Fetches up to 3 pages (90 results) from the GitHub search API.
+ */
+export async function listContributions(
+  githubUsername: string,
+  ownedRepoFullNames: Set<string>
+): Promise<GithubContribution[]> {
+  const query = `type:pr+author:${githubUsername}+is:merged`
+  const results: GithubContribution[] = []
+
+  for (let page = 1; page <= 3; page++) {
+    const data = await publicGhFetch<SearchResult>(
+      `/search/issues?q=${query}&sort=updated&per_page=30&page=${page}`
+    ).catch(() => ({ items: [] as SearchIssue[] }))
+
+    if (!data.items?.length) break
+
+    for (const item of data.items) {
+      if (!item.pull_request?.merged_at) continue
+      const parts = item.repository_url.split("/repos/")
+      const repoFullName = parts[1] ?? ""
+      if (!repoFullName || ownedRepoFullNames.has(repoFullName)) continue
+
+      results.push({
+        id: item.id,
+        title: item.title,
+        html_url: item.html_url,
+        repo_full_name: repoFullName,
+        repo_html_url: `https://github.com/${repoFullName}`,
+        merged_at: item.pull_request.merged_at,
+        state: "merged",
+        labels: item.labels.map((l) => l.name),
+      })
+    }
+    if (data.items.length < 30) break
+  }
+
+  return results
 }

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
-import { getRepos, generatePortfolio } from "./actions"
+import { getRepoData, generatePortfolio } from "./actions"
 import { RepoSelector } from "@/components/dashboard/repo-selector"
 import { UserMenu } from "@/components/dashboard/user-menu"
 import { getMyPortfolio } from "@/lib/rust-api"
@@ -13,8 +13,8 @@ export default async function DashboardPage() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session) redirect("/login")
 
-  const [repos, portfolio] = await Promise.all([
-    getRepos(),
+  const [repoData, portfolio] = await Promise.all([
+    getRepoData(),
     getMyPortfolio(),
   ])
 
@@ -24,7 +24,8 @@ export default async function DashboardPage() {
     redirect(`/dashboard/generate/${jobId}`)
   }
 
-  const username = session.user.name ?? session.user.id
+  const { ownRepos, orgRepos, contributions, accessType, githubUsername } = repoData
+  const totalRepos = ownRepos.length + orgRepos.length
 
   return (
     <div className="min-h-dvh bg-background">
@@ -37,7 +38,7 @@ export default async function DashboardPage() {
           <div className="flex items-center gap-4">
             {portfolio && (
               <Link
-                href={`/${username}`}
+                href={`/${githubUsername}`}
                 target="_blank"
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
@@ -75,7 +76,7 @@ export default async function DashboardPage() {
                 }`}
               />
               <Link
-                href={`/${username}`}
+                href={`/${githubUsername}`}
                 target="_blank"
                 className="rounded-full border border-border px-4 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
               >
@@ -87,23 +88,36 @@ export default async function DashboardPage() {
 
         {/* Heading */}
         <div className="mb-8">
-          <h1 className="text-xl font-semibold text-foreground">
-            {portfolio ? "Regenerate portfolio" : "Build your portfolio"}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Pick the repositories that best represent your work. Astra will
-            analyse the code and write your portfolio.
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-xl font-semibold text-foreground">
+              {portfolio ? "Regenerate portfolio" : "Build your portfolio"}
+            </h1>
+            {accessType === "public" && (
+              <span className="rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs px-2 py-0.5 font-medium border border-amber-500/20">
+                Public only
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {accessType === "authenticated"
+              ? "Pick repositories from your profile and organisations. Astra will analyse the code and write your portfolio."
+              : "Showing public repositories. Sign in with GitHub to include private repos."}
           </p>
         </div>
 
-        {repos.length === 0 ? (
+        {totalRepos === 0 && contributions.length === 0 ? (
           <div className="rounded-2xl border border-border p-12 text-center">
             <p className="text-sm text-muted-foreground">
-              No public repositories found. Push some code to GitHub first.
+              No repositories found for @{githubUsername}. Push some code to GitHub first.
             </p>
           </div>
         ) : (
-          <RepoSelector repos={repos} onGenerate={handleGenerate} />
+          <RepoSelector
+            ownRepos={ownRepos}
+            orgRepos={orgRepos}
+            contributions={contributions}
+            onGenerate={handleGenerate}
+          />
         )}
       </main>
     </div>
