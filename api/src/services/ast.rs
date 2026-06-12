@@ -2,6 +2,20 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tree_sitter::Parser;
 
+/// A single entry in a repository file tree (path + byte size).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TreeEntry {
+    pub path: String,
+    pub size: u64,
+}
+
+/// A file path and its heuristic relevance score.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScoredFile {
+    pub path: String,
+    pub score: i32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AstMetadata {
     pub language: String,
@@ -48,6 +62,18 @@ impl Language {
         }
     }
 
+    /// Case-insensitive parse from a language name or extension string.
+    pub fn from_str_loose(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "javascript" | "js" | "jsx" => Some(Self::JavaScript),
+            "typescript" | "ts" | "tsx" => Some(Self::TypeScript),
+            "python" | "py" => Some(Self::Python),
+            "rust" | "rs" => Some(Self::Rust),
+            "go" | "golang" => Some(Self::Go),
+            _ => None,
+        }
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::JavaScript => "javascript",
@@ -55,6 +81,17 @@ impl Language {
             Self::Python => "python",
             Self::Rust => "rust",
             Self::Go => "go",
+        }
+    }
+
+    /// File extensions that constitute source code for this language.
+    pub fn source_extensions(self) -> &'static [&'static str] {
+        match self {
+            Self::JavaScript => &[".js", ".jsx", ".mjs", ".cjs"],
+            Self::TypeScript => &[".ts", ".tsx"],
+            Self::Python => &[".py"],
+            Self::Rust => &[".rs"],
+            Self::Go => &[".go"],
         }
     }
 }
@@ -86,6 +123,8 @@ impl AstService {
             tracing::warn!("failed to set tree-sitter language for {:?}", lang);
             return meta;
         }
+        // 5-second hard limit per file — prevents pathological inputs from blocking the thread
+        parser.set_timeout_micros(5_000_000);
 
         let tree = match parser.parse(source, None) {
             Some(t) => t,
@@ -576,9 +615,141 @@ impl AstService {
         frameworks
     }
 
-    pub fn metadata_to_json(&self, meta: &AstMetadata) -> Value {
-        serde_json::to_value(meta).unwrap_or(Value::Null)
+    /// Scores a flat file tree and returns the top `max_files` candidates.
+    /// Language is used to filter by source extension; pass `None` to accept any extension.
+    pub fn score_file_tree(
+        &self,
+        entries: &[TreeEntry],
+        lang: Option<Language>,
+        max_files: usize,
+    ) -> Vec<ScoredFile> {
+        let exts: &[&str] = lang.map(|l| l.source_extensions()).unwrap_or(&[]);
+
+        let mut scored: Vec<ScoredFile> = entries
+            .iter()
+            .filter_map(|e| {
+                let s = Self::score_path(&e.path, e.size, exts);
+                if s >= 0 { Some(ScoredFile { path: e.path.clone(), score: s }) } else { None }
+            })
+            .collect();
+
+        scored.sort_by(|a, b| b.score.cmp(&a.score));
+        scored.truncate(max_files);
+        scored
     }
+
+    /// Heuristic score for a single file path. Returns -1 to exclude the file.
+    fn score_path(path: &str, size: u64, exts: &[&str]) -> i32 {
+        let lower = path.to_lowercase();
+        let file_name = lower.rsplit('/').next().unwrap_or(&lower);
+        let depth = path.chars().filter(|&c| c == '/').count() as i32;
+
+        // Hard-exclude generated / dependency / build directories
+        const EXCLUDED_DIRS: &[&str] = &[
+            "node_modules/", ".git/", "dist/", "build/", "target/",
+            "vendor/", "__pycache__/", ".cache/", "coverage/", ".next/",
+            "out/", ".turbo/", ".vercel/", "generated/", ".nyc_output/",
+        ];
+        if EXCLUDED_DIRS.iter().any(|d| lower.contains(d)) {
+            return -1;
+        }
+
+        // Exclude test / fixture / mock files
+        const TEST_PATTERNS: &[&str] = &[
+            ".test.", ".spec.", "_test.", "_spec.",
+            "/test/", "/tests/", "/spec/", "/__tests__/",
+            "/e2e/", "/testdata/", "/fixtures/", "/mocks/", "/__mocks__/",
+        ];
+        if TEST_PATTERNS.iter().any(|p| lower.contains(p)) {
+            return -1;
+        }
+
+        // Exclude non-source file types (applies mainly when lang is unknown)
+        const SKIP_EXT: &[&str] = &[
+            ".d.ts", ".min.js", ".min.css", ".map", ".lock", ".sum",
+            ".yaml", ".yml", ".json", ".md", ".txt", ".env",
+            ".toml", ".sh", ".bash", ".zsh", ".proto", ".graphql", ".sql",
+            ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",
+            ".woff", ".woff2", ".ttf", ".eot",
+        ];
+        if SKIP_EXT.iter().any(|e| file_name.ends_with(e)) {
+            return -1;
+        }
+
+        // Must match a known source extension when the language is identified
+        if !exts.is_empty() && !exts.iter().any(|e| file_name.ends_with(*e)) {
+            return -1;
+        }
+
+        // Size gates: ignore stubs (< 100 B) and likely-generated large files (> 150 KB)
+        if size < 100 || size > 150_000 {
+            return -1;
+        }
+
+        let mut score: i32 = 400;
+
+        // Depth: prefer files 1–3 levels deep over root-level config blobs
+        score += match depth {
+            0 => -30,
+            1 => 80,
+            2 => 60,
+            3 => 30,
+            4 => 0,
+            d => -(d - 4) * 15,
+        };
+
+        // Core directory bonus — first match wins
+        const CORE_DIRS: &[(&str, i32)] = &[
+            ("core/", 120), ("engine/", 110), ("domain/", 100),
+            ("src/", 90), ("lib/", 90), ("pkg/", 80), ("internal/", 80),
+            ("services/", 80), ("service/", 80), ("usecase/", 75), ("usecases/", 75),
+            ("handlers/", 70), ("handler/", 70), ("api/", 65),
+            ("routes/", 65), ("router/", 65), ("cmd/", 70), ("app/", 60),
+            ("models/", 60), ("model/", 60), ("schema/", 60),
+            ("store/", 65), ("repository/", 65), ("repositories/", 65),
+            ("middleware/", 55), ("controllers/", 60), ("controller/", 60),
+        ];
+        for (dir, bonus) in CORE_DIRS {
+            if lower.contains(dir) {
+                score += bonus;
+                break;
+            }
+        }
+
+        // Entry-point / key-module name bonus (match on file stem)
+        let stem = file_name.rfind('.').map(|i| &file_name[..i]).unwrap_or(file_name);
+        const ENTRY_NAMES: &[(&str, i32)] = &[
+            ("main", 300), ("lib", 250), ("index", 220), ("app", 200),
+            ("server", 180), ("mod", 160), ("__init__", 150),
+            ("cli", 140), ("cmd", 140), ("run", 120),
+            ("core", 110), ("engine", 110), ("api", 100),
+            ("service", 100), ("services", 95), ("handler", 90),
+            ("router", 90), ("routes", 90), ("store", 85),
+            ("schema", 80), ("model", 80), ("controller", 80),
+            ("resolver", 80), ("middleware", 70), ("config", 50),
+        ];
+        for (name, bonus) in ENTRY_NAMES {
+            if stem == *name {
+                score += bonus;
+                break;
+            }
+        }
+
+        // Size bonus: meaningful files tend to be 500 B – 20 KB
+        score += match size {
+            500..=5_000 => 40,
+            5_001..=20_000 => 50,
+            20_001..=60_000 => 20,
+            _ => 0,
+        };
+
+        score
+    }
+}
+
+/// Serializes `AstMetadata` to a JSON value for database storage.
+pub fn ast_metadata_to_json(meta: &AstMetadata) -> Value {
+    serde_json::to_value(meta).unwrap_or(Value::Null)
 }
 
 #[cfg(test)]
