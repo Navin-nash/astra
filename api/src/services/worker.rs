@@ -10,8 +10,9 @@ use crate::{
     error::Result,
     models::repository::GithubRepoInfo,
     services::{
-        ai::{AiService, ContributionInput, RepoSummaryInput},
+        ai::{ContributionInput, RepoSummaryInput},
         ast::{self, AstMetadata, AstService, SourceFile},
+        cache,
     },
     state::AppState,
 };
@@ -137,7 +138,7 @@ async fn run_generation(
         }
     };
 
-    let ai_svc = Arc::new(AiService::new(&state.config));
+    let ai_svc = state.ai.clone();
 
     let portfolio = match db::portfolios::upsert(
         &state.db,
@@ -203,14 +204,21 @@ async fn run_generation(
 
     update(JobStatus::GeneratingContent, 40);
 
-    // ── Phase 2: AI repo summaries — serialized with semaphore ───────────────
-    // Cap concurrent AI calls at 3 to avoid cascading 429s on free-tier models.
+    // ── Phase 2: AI repo summaries — cache-first, concurrency 8 ─────────────
     let t2 = Instant::now();
-    let ai_sem = Arc::new(Semaphore::new(3));
+    let ai_sem = Arc::new(Semaphore::new(8));
     let summaries: Vec<String> = join_all(analyses.iter().map(|(repo, ast_meta)| {
         let ai_svc = ai_svc.clone();
         let sem = ai_sem.clone();
+        let redis_client = state.redis.clone();
         async move {
+            // Cache-first: skip AI entirely if this repo's content hasn't changed.
+            let cache_key = cache::repo_summary_cache_key(&repo.name, repo.readme.as_deref(), ast_meta);
+            if let Some(cached) = cache::get_repo_summary(&redis_client, &cache_key).await {
+                tracing::info!(job_id = %job_id, repo = %repo.name, "repo summary cache hit");
+                return cached;
+            }
+
             let _permit = sem.acquire_owned().await.expect("semaphore closed");
             let t = Instant::now();
             tracing::info!(job_id = %job_id, repo = %repo.name, "AI summary started");
@@ -234,6 +242,7 @@ async fn run_generation(
                         chars = s.len(),
                         "AI summary succeeded"
                     );
+                    cache::set_repo_summary(&redis_client, &cache_key, &s).await;
                     s
                 }
                 Err(e) => {
