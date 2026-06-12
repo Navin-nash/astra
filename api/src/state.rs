@@ -10,7 +10,7 @@ use crate::{
     auth::jwt::JwtService,
     config::Config,
     error::{AppError, Result},
-    services::worker::GenerationJob,
+    services::{ai::AiService, worker::GenerationJob},
 };
 
 pub struct AppState {
@@ -19,6 +19,7 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub jwt: JwtService,
     pub jobs: Arc<DashMap<Uuid, GenerationJob>>,
+    pub ai: Arc<AiService>,
 }
 
 impl AppState {
@@ -36,13 +37,16 @@ impl AppState {
     pub async fn from_pool(db: PgPool, config: Config) -> Result<Self> {
         let redis = RedisClient::open(config.redis_url.as_str()).map_err(AppError::Redis)?;
         let jwt = JwtService::new(&config.jwt_secret);
+        let ai = Arc::new(AiService::new(&config));
+        let config = Arc::new(config);
 
         Ok(Self {
             db,
             redis,
             jwt,
-            config: Arc::new(config),
+            config,
             jobs: Arc::new(DashMap::new()),
+            ai,
         })
     }
 
