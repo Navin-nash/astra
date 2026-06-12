@@ -36,8 +36,8 @@ sqlx = { version = "0.8", features = [
 # Cache
 redis = { version = "0.26", features = ["tokio-comp", "connection-manager"] }
 
-# AI
-async-openai = "0.27"
+# HTTP client (replaces async-openai — avoids upstream deserialization quirks)
+reqwest = { version = "0.12", features = ["json"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -64,6 +64,7 @@ tree-sitter-typescript = "0.21"
 tree-sitter-python = "0.21"
 tree-sitter-rust = "0.21"
 tree-sitter-go = "0.21"
+sha2 = "0.11.0"
 
 [dev-dependencies]
 tokio-test = "0.4"
