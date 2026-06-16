@@ -2,6 +2,7 @@
 
 import { z } from "zod"
 import { sql } from "drizzle-orm"
+import { sendWaitlistConfirmationEmail } from "@/lib/email"
 
 const emailSchema = z.string().email("Please enter a valid email address")
 
@@ -15,9 +16,18 @@ export async function joinWaitlist(email: string): Promise<WaitlistResult> {
 
   try {
     const { db } = await import("@/lib/db")
-    await db.execute(
+    const result = await db.execute(
       sql`INSERT INTO waitlist (email) VALUES (${parsed.data}) ON CONFLICT (email) DO NOTHING`
     )
+
+    // Only send confirmation for new signups (not duplicates)
+    const inserted = (result.rowCount ?? 0) > 0
+    if (inserted) {
+      await sendWaitlistConfirmationEmail(parsed.data).catch(() => {
+        // Email failure is non-fatal — signup still succeeded
+      })
+    }
+
     return { success: true }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Database error"
