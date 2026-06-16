@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight } from '@phosphor-icons/react';
 import { WordRotate } from '@/components/ui/word-rotate';
 
-const VIDEO_SRC = '/hero.mp4';
+const VIDEO_SRC = 'https://res.cloudinary.com/dtqadlaim/video/upload/v1781593121/hero_catr9o.mp4';
 
 const ROLES = [
   'full-stack engineers',
