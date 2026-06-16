@@ -1,206 +1,154 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { motion, useReducedMotion } from "motion/react";
-import { ArrowRight, GithubLogo } from "@phosphor-icons/react";
-import { WaitlistForm } from "@/components/home/waitlist-form";
+import { motion, useReducedMotion } from 'motion/react';
+import { Button } from '@/components/ui/button';
+import { ArrowRight } from '@phosphor-icons/react';
+import { WordRotate } from '@/components/ui/word-rotate';
+
+const VIDEO_SRC = '/hero.mp4';
+
+const ROLES = [
+  'full-stack engineers',
+  'ML researchers',
+  'systems builders',
+  'backend developers',
+  'open-source contributors',
+];
+
+const container = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.11, delayChildren: 0.1 } },
+};
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
-const fadeUp = (delay = 0) => ({
-  initial: { opacity: 0, y: 24 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.7, delay, ease: EASE },
-});
-
-const TRUST_ITEMS = [
-  { icon: GithubLogo, label: "GitHub OAuth" },
-  { label: "No credit card" },
-  { label: "Live in 60 seconds" },
-];
+const fadeUp = {
+  hidden: { opacity: 0, y: 22 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.75, ease: EASE } },
+};
 
 export function Hero() {
   const reduce = useReducedMotion();
 
   return (
-    <section className="relative min-h-[100dvh] flex flex-col justify-center overflow-hidden pt-20">
-      {/* Subtle dot grid */}
-      <div className="absolute inset-0 grid-dots opacity-30 pointer-events-none" />
+    <section className="relative min-h-dvh overflow-hidden flex items-center justify-center">
+      {/* Background video */}
+      <video
+        className="absolute inset-0 w-full h-full object-cover"
+        src={VIDEO_SRC}
+        autoPlay
+        muted
+        playsInline
+        loop
+      />
 
-      {/* Soft brand glow behind headline */}
+      {/* Vignette — stronger toward edges so text always reads */}
       <div
-        className="absolute top-1/3 left-0 w-[500px] h-[500px] pointer-events-none"
+        className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(circle, oklch(0.65 0.20 47 / 0.06) 0%, transparent 65%)",
+            'radial-gradient(ellipse 80% 70% at 50% 55%, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.82) 100%)',
         }}
         aria-hidden
       />
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-
-          {/* Left: copy */}
-          <div className="flex flex-col gap-6">
-            {/* Badge */}
-            <motion.div
-              {...(reduce ? {} : fadeUp(0.1))}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand/25 bg-brand-muted text-brand text-xs font-semibold w-fit"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" aria-hidden />
-              Now accepting early access
-            </motion.div>
-
-            {/* Headline */}
-            <motion.h1
-              {...(reduce ? {} : fadeUp(0.2))}
-              className="text-5xl sm:text-6xl lg:text-6xl xl:text-7xl font-bold tracking-tight leading-[1.0] text-foreground"
-              style={{ textWrap: "balance" }}
-            >
-              Your GitHub,{" "}
-              <br className="hidden sm:block" />
-              <span className="text-brand">as a portfolio.</span>
-            </motion.h1>
-
-            {/* Subtext */}
-            <motion.p
-              {...(reduce ? {} : fadeUp(0.3))}
-              className="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-[42ch]"
-            >
-              Astra reads your code structure. AI-powered summaries, instant
-              deployment, zero manual work.
-            </motion.p>
-
-            {/* CTA form */}
-            <motion.div
-              {...(reduce ? {} : fadeUp(0.4))}
-              className="flex flex-col sm:flex-row gap-3 max-w-md"
-            >
-              <WaitlistForm />
-            </motion.div>
-
-            {/* Trust strip */}
-            <motion.div
-              {...(reduce ? {} : fadeUp(0.5))}
-              className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground"
-            >
-              {TRUST_ITEMS.map(({ icon: Icon, label }, i) => (
-                <React.Fragment key={label}>
-                  {i > 0 && (
-                    <span aria-hidden className="w-px h-3 bg-border" />
-                  )}
-                  <span className="flex items-center gap-1.5">
-                    {Icon && <Icon size={13} aria-hidden />}
-                    {label}
-                  </span>
-                </React.Fragment>
-              ))}
-            </motion.div>
+      {/* Content */}
+      <motion.div
+        variants={reduce ? undefined : container}
+        initial={reduce ? false : 'hidden'}
+        animate="show"
+        className="relative z-10 flex flex-col items-center gap-6 text-center px-4 max-w-4xl w-full"
+      >
+        {/* Eyebrow */}
+        <motion.div variants={reduce ? undefined : fadeUp}>
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/10 border border-white/15 backdrop-blur-sm text-white/55 text-[11px] uppercase tracking-[0.18em]">
+            <span
+              className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_6px_1px_#4ade80]"
+              aria-hidden
+            />
+            Now in early access
           </div>
-
-          {/* Right: terminal preview */}
-          <motion.div
-            initial={reduce ? false : { opacity: 0, x: 32 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.9, delay: 0.3, ease: EASE }}
-            className="hidden lg:block"
-          >
-            <CodePreview />
-          </motion.div>
-        </div>
-
-        {/* Scroll indicator strip */}
-        <motion.div
-          {...(reduce ? {} : fadeUp(0.8))}
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 hidden lg:flex items-center gap-2"
-        >
-          <span className="w-px h-8 bg-gradient-to-b from-transparent via-border to-transparent" aria-hidden />
         </motion.div>
-      </div>
+
+        {/* Headline — solid color from the start, no sweep dependency */}
+        <motion.h1
+          variants={reduce ? undefined : fadeUp}
+          className="font-black tracking-tight leading-[1.06] text-white"
+          style={{ fontSize: 'clamp(2.6rem, 6vw, 5.5rem)', textWrap: 'balance' }}
+        >
+          Your GitHub,
+          <br />
+          <span style={{ color: 'var(--brand)' }}>as a portfolio.</span>
+        </motion.h1>
+
+        {/* Subtext */}
+        <motion.p
+          variants={reduce ? undefined : fadeUp}
+          className="text-base md:text-lg leading-relaxed max-w-[42ch] text-white/60"
+        >
+          Connect GitHub once. Astra reads your codebase, surfaces your architecture,
+          and ships a portfolio that shows how you actually build — live in under 90 seconds.
+        </motion.p>
+
+        {/* Rotating audience */}
+        <motion.div
+          variants={reduce ? undefined : fadeUp}
+          className="flex items-center justify-center gap-2 text-sm text-white/40 -mt-1"
+        >
+          <span>Built for</span>
+          <WordRotate
+            words={ROLES}
+            duration={2600}
+            className="text-white/70 font-semibold text-sm"
+            motionProps={{
+              initial: { opacity: 0, y: 6 },
+              animate: { opacity: 1, y: 0 },
+              exit: { opacity: 0, y: -6 },
+              transition: { duration: 0.2, ease: 'easeOut' },
+            }}
+          />
+        </motion.div>
+
+        {/* Stat pills */}
+        <motion.div
+          variants={reduce ? undefined : fadeUp}
+          className="flex flex-wrap justify-center gap-2 -mt-1"
+        >
+          {['⚡ 90s avg generation', '0 config files', '5 repos analyzed'].map((s) => (
+            <span
+              key={s}
+              className="px-3 py-1 rounded-full bg-white/8 border border-white/12 text-white/48 text-xs backdrop-blur-sm"
+            >
+              {s}
+            </span>
+          ))}
+        </motion.div>
+
+        {/* CTAs */}
+        <motion.div
+          variants={reduce ? undefined : fadeUp}
+          className="flex items-center gap-3 flex-wrap justify-center mt-1"
+        >
+          <Button
+            size="lg"
+            className="gap-2 rounded-full px-7"
+            onClick={() => { window.location.hash = 'waitlist'; }}
+          >
+            Get early access
+            <ArrowRight size={15} aria-hidden />
+          </Button>
+          <Button
+            size="lg"
+            variant="ghost"
+            className="gap-2 rounded-full px-7 text-white/65 hover:text-white hover:bg-white/10 border border-white/15"
+            onClick={() =>
+              document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' })
+            }
+          >
+            See demo
+          </Button>
+        </motion.div>
+      </motion.div>
     </section>
-  );
-}
-
-function CodePreview() {
-  return (
-    <div className="relative rounded-2xl border border-border overflow-hidden bg-foreground shadow-xl shadow-foreground/10">
-      {/* Terminal bar */}
-      <div className="flex items-center gap-1.5 px-4 py-3 border-b border-border/20 bg-foreground/95">
-        <span className="w-3 h-3 rounded-full bg-red-500/70" aria-hidden />
-        <span className="w-3 h-3 rounded-full bg-yellow-500/70" aria-hidden />
-        <span className="w-3 h-3 rounded-full bg-green-500/70" aria-hidden />
-        <span className="ml-4 text-[11px] font-mono text-background/40">
-          astra analyze ./src
-        </span>
-      </div>
-
-      {/* Code body */}
-      <div className="p-5 font-mono text-[12px] leading-relaxed space-y-1 bg-foreground">
-        <CodeLine delay={0.6} color="muted"># Parsing AST...</CodeLine>
-        <CodeLine delay={0.75} color="brand">Framework: Next.js 14 (App Router)</CodeLine>
-        <CodeLine delay={0.9} color="muted">Exports: 47 symbols across 23 modules</CodeLine>
-        <CodeLine delay={1.05} color="brand">Patterns: server-components, custom-hooks</CodeLine>
-        <CodeLine delay={1.2} color="muted">Dependencies: react, tailwindcss, prisma</CodeLine>
-        <div className="pt-2">
-          <CodeLine delay={1.35} color="green">Generating portfolio summary...</CodeLine>
-        </div>
-        <div className="pt-2 space-y-1">
-          <CodeLine delay={1.5} color="muted">{`mdx_content = """`}</CodeLine>
-          <CodeLine delay={1.6} color="white" indent={1}>{`<ProjectSummary title="my-saas-app">`}</CodeLine>
-          <CodeLine delay={1.7} color="muted" indent={2}>A full-stack SaaS built with Next.js App</CodeLine>
-          <CodeLine delay={1.8} color="muted" indent={2}>Router, featuring server components and...</CodeLine>
-          <CodeLine delay={1.9} color="white" indent={1}>{`</ProjectSummary>`}</CodeLine>
-          <CodeLine delay={2.0} color="muted">{`"""`}</CodeLine>
-        </div>
-        <div className="pt-3 flex items-center gap-2">
-          <CodeLine delay={2.1} color="green">Published at useastra.qzz.io/you</CodeLine>
-          <BlinkingCursor delay={2.1} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CodeLine({
-  children,
-  delay = 0,
-  color = "muted",
-  indent = 0,
-}: {
-  children: React.ReactNode;
-  delay?: number;
-  color?: "muted" | "brand" | "green" | "white";
-  indent?: number;
-}) {
-  const colors: Record<string, string> = {
-    muted: "text-background/40",
-    brand: "text-brand",
-    green: "text-green-400",
-    white: "text-background/90",
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.4, delay }}
-      className={`${colors[color] ?? colors.muted} ${
-        indent === 1 ? "pl-4" : indent === 2 ? "pl-8" : ""
-      }`}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-function BlinkingCursor({ delay = 0 }: { delay?: number }) {
-  return (
-    <motion.span
-      initial={{ opacity: 0 }}
-      animate={{ opacity: [0, 1, 1, 0] }}
-      transition={{ duration: 1.2, delay, repeat: Infinity, times: [0, 0.1, 0.8, 1] }}
-      className="inline-block w-2 h-4 bg-brand align-middle"
-      aria-hidden
-    />
   );
 }

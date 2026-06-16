@@ -5,7 +5,7 @@ const templates = [
     id: "void",
     label: "Void",
     description: "Dark, cosmic — space-black with brand accents",
-    colors: ["#050509", "#06b6d4", "#1e1e2e"],
+    colors: ["#050509", "#EB5B00", "#1e1e2e"],
   },
   {
     id: "minimal",

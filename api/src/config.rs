@@ -83,12 +83,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn config_fails_without_google_api_key() {
-        if std::env::var("GOOGLE_API_KEY").is_err() {
-            let result = Config::from_env();
-            assert!(result.is_err());
-            let msg = result.unwrap_err().to_string();
-            assert!(msg.contains("GOOGLE_API_KEY"), "Expected GOOGLE_API_KEY in error, got: {msg}");
+    fn config_fails_without_required_env() {
+        // from_env() must fail when the environment is incomplete (as in CI without .env).
+        // We only assert on the error type, not the exact missing key, because the first
+        // missing key (DATABASE_URL, GOOGLE_API_KEY, etc.) depends on load order.
+        if std::env::var("DATABASE_URL").is_err() || std::env::var("GOOGLE_API_KEY").is_err() {
+            assert!(
+                Config::from_env().is_err(),
+                "Config::from_env() must fail when required env vars are absent"
+            );
         }
     }
 }

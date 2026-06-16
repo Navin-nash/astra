@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use axum::Router;
 use sqlx::PgPool;
-use wiremock::MockServer;
 
 use astra_api::{config::Config, state::AppState};
 
@@ -21,39 +20,35 @@ pub fn test_config() -> Config {
             .unwrap_or_else(|_| "postgres://astra:astra_dev@localhost:5432/astra_test".into()),
         redis_url: std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://localhost:6379/1".into()),
         jwt_secret: "test-jwt-secret-that-is-long-enough-for-hmac-sha256".into(),
-        encryption_key: [42u8; 32],
-        github_client_id: "test_client_id".into(),
-        github_client_secret: "test_client_secret".into(),
-        github_redirect_uri: "http://localhost:8080/auth/github/callback".into(),
         frontend_url: "http://localhost:3000".into(),
-        openai_api_key: "test_key".into(),
-        openai_model: "gpt-4o-mini".into(),
-        openai_base_url: None,
+        google_api_key: "test_google_key".into(),
+        google_base_url: "https://generativelanguage.googleapis.com/v1beta/openai".into(),
+        nvidia_nim_api_key: "test_nim_key".into(),
+        nvidia_nim_base_url: "https://integrate.api.nvidia.com/v1".into(),
+        groq_api_key: "test_groq_key".into(),
+        groq_base_url: "https://api.groq.com/openai/v1".into(),
+        openrouter_api_key: "test_or_key".into(),
+        openrouter_base_url: "https://openrouter.ai/api/v1".into(),
     }
 }
 
-pub async fn create_test_user(pool: &PgPool) -> (astra_api::models::user::User, String) {
-    use astra_api::{db, services::crypto::CryptoService};
+pub struct TestUser {
+    pub id: String,
+    pub username: String,
+}
 
-    let crypto = CryptoService::new(&[42u8; 32]);
-    let encrypted_token = crypto.encrypt(b"test_github_token").unwrap();
-
-    let user = db::users::upsert(
-        pool,
-        "test_github_id",
-        "testuser",
-        Some("Test User"),
-        Some("https://avatars.github.com/test"),
-        Some("test@example.com"),
-        &encrypted_token,
-    )
-    .await
-    .unwrap();
+/// Creates a test JWT for a synthetic user. No DB insertion — the Rust API
+/// does not manage users (Better Auth on the Next.js side owns that).
+pub async fn create_test_user(_pool: &PgPool) -> (TestUser, String) {
+    let user = TestUser {
+        id: "test-better-auth-user-id".to_string(),
+        username: "testuser".to_string(),
+    };
 
     let jwt = astra_api::auth::jwt::JwtService::new(
         "test-jwt-secret-that-is-long-enough-for-hmac-sha256",
     );
-    let token = jwt.create_token(user.id, &user.username).unwrap();
+    let token = jwt.create_token(&user.id, &user.username).unwrap();
 
     (user, token)
 }

@@ -15,6 +15,13 @@
       "when": 1780659284396,
       "tag": "0001_fast_luckman",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780762001786,
+      "tag": "0002_add_github_username",
+      "breakpoints": true
     }
   ]
 }

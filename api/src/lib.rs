@@ -43,8 +43,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
     let protected = Router::new()
         .route("/api/generate", post(routes::generate::start))
         .route("/api/generate/:job_id", get(routes::generate::status))
+        .route("/api/select-files", post(routes::select_files::select_files))
         .route("/api/portfolio", get(routes::portfolio::get_mine))
         .route("/api/portfolio", patch(routes::portfolio::update))
+        .route("/api/portfolio/preview", get(routes::portfolio::get_preview))
         .route("/api/portfolio/publish", post(routes::portfolio::publish))
         .route(
             "/api/portfolio/unpublish",

@@ -1,9 +1,11 @@
 import { eq, and } from "drizzle-orm"
 import { db } from "./db"
 import { baAccount, baUser } from "./schema"
-import type { GithubRepo, GithubContribution, OrgRepo } from "@/types/portfolio"
+import { selectFiles } from "./rust-api"
+import type { GithubRepo, GithubContribution, OrgRepo, GithubProfile } from "@/types/portfolio"
 
 const GITHUB_API = "https://api.github.com"
+const GITHUB_GRAPHQL = "https://api.github.com/graphql"
 
 function ghHeaders(token: string) {
   return {
@@ -23,7 +25,7 @@ async function getGithubToken(userId: string): Promise<string> {
   return token
 }
 
-interface GithubProfile {
+interface GithubUserProfile {
   login: string
   avatar_url: string
 }
@@ -41,19 +43,16 @@ export async function resolveAndPersistGithubUsername(
   })
   if (!account?.accessToken) return null
 
-  const profile = await ghFetch<GithubProfile>("/user", account.accessToken)
+  const profile = await ghFetch<GithubUserProfile>("/user", account.accessToken)
   if (!profile.login) return null
 
-  const user = await db.query.baUser.findFirst({
+  const existing = await db.query.baUser.findFirst({
     where: eq(baUser.id, userId),
-    columns: { githubUsername: true } as never,
+    columns: { githubUsername: true },
   })
 
-  if (!(user as unknown as { githubUsername: string | null })?.githubUsername) {
-    await db
-      .update(baUser)
-      .set({ githubUsername: profile.login } as never)
-      .where(eq(baUser.id, userId))
+  if (!existing?.githubUsername) {
+    await db.update(baUser).set({ githubUsername: profile.login }).where(eq(baUser.id, userId))
   }
 
   return profile.login
@@ -136,77 +135,116 @@ const LANG_EXTENSIONS: Record<string, string[]> = {
   "c#": [".cs"],
 }
 
-// Higher-priority entry point names get fetched first
-const ENTRY_NAMES = ["index", "main", "app", "server", "mod", "lib", "__init__", "cli", "cmd", "run"]
-
-interface ContentItem {
-  name: string
-  type: "file" | "dir"
+interface GitTreeEntry {
   path: string
-  size: number
+  type: string
+  size?: number
+}
+
+interface GitTreeResponse {
+  tree: GitTreeEntry[]
+  truncated: boolean
 }
 
 /**
- * Fetches up to `maxFiles` source files from a repository using the GitHub Contents API.
- * Lists root + src/ directories, scores by entry-point name priority and file size,
- * then fetches content for the top candidates.
+ * Fetches the complete recursive file tree for a repo via the GitHub Trees API.
+ * Returns only blob entries (files, not directories).
+ */
+async function fetchFileTree(
+  fullName: string,
+  token: string
+): Promise<Array<{ path: string; size: number }>> {
+  const data = await ghFetch<GitTreeResponse>(
+    `/repos/${fullName}/git/trees/HEAD?recursive=1`,
+    token
+  ).catch(() => ({ tree: [], truncated: false }))
+
+  if (data.truncated) {
+    // Very large repos: tree was cut off at ~100k entries. Still useful.
+    // A future improvement could walk sub-trees manually.
+  }
+
+  return data.tree
+    .filter((e) => e.type === "blob" && typeof e.size === "number")
+    .map((e) => ({ path: e.path, size: e.size ?? 0 }))
+}
+
+// Local fallback scorer used when the Rust API is unavailable.
+const LOCAL_ENTRY_NAMES = ["main", "lib", "index", "app", "server", "mod", "__init__", "cli", "cmd", "run"]
+
+function localScoreFile(path: string, size: number, exts: string[]): number {
+  const lower = path.toLowerCase()
+  const fileName = lower.split("/").pop() ?? ""
+  const depth = (path.match(/\//g) ?? []).length
+
+  const skipDirs = ["node_modules", "dist", "build", "target", "vendor", "__pycache__", ".cache", "coverage"]
+  if (skipDirs.some((d) => lower.includes(`/${d}/`) || lower.startsWith(`${d}/`))) return -1
+  if (lower.includes(".test.") || lower.includes(".spec.") || lower.includes("_test.")) return -1
+  if (!exts.some((e) => fileName.endsWith(e))) return -1
+  if (size < 100 || size > 100_000) return -1
+
+  const stem = fileName.replace(/\.[^.]+$/, "")
+  const entryRank = LOCAL_ENTRY_NAMES.indexOf(stem)
+  const entryBonus = entryRank !== -1 ? 1000 - entryRank * 80 : 0
+  const srcBonus = lower.includes("src/") || lower.includes("lib/") ? 100 : 0
+  const depthBonus = depth <= 2 ? 80 : depth <= 4 ? 40 : 0
+
+  return 400 + entryBonus + srcBonus + depthBonus
+}
+
+/**
+ * Selects the most relevant source files from a full repo file tree.
+ * Sends the tree to the Rust /api/select-files scorer; falls back to a local
+ * heuristic if the Rust call fails (e.g. API unavailable during cold start).
  */
 async function fetchSourceFiles(
   fullName: string,
   lang: string,
   token: string,
-  maxFiles = 3
+  userId: string,
+  username: string,
+  maxFiles = 6
 ): Promise<Array<{ path: string; content: string }>> {
   const exts = LANG_EXTENSIONS[lang.toLowerCase()] ?? []
-  if (exts.length === 0) return []
 
-  const [rootItems, srcItems] = await Promise.all([
-    ghFetch<ContentItem[]>(`/repos/${fullName}/contents`, token).catch(() => [] as ContentItem[]),
-    ghFetch<ContentItem[]>(`/repos/${fullName}/contents/src`, token).catch(
-      () => [] as ContentItem[]
-    ),
-  ])
+  // Fetch the full repo tree (paths + sizes only, no content)
+  const tree = await fetchFileTree(fullName, token)
+  if (tree.length === 0) return []
 
-  const allItems: ContentItem[] = [
-    ...rootItems,
-    ...srcItems.map((i) => ({ ...i, path: `src/${i.name}` })),
-  ]
+  // Pre-filter to reduce payload: skip obviously irrelevant large trees
+  const preFiltered = tree
+    .filter((e) => e.size > 100 && e.size < 150_000)
+    .filter((e) => !e.path.startsWith(".") && !e.path.includes("node_modules"))
+    .slice(0, 2_000)
 
-  const scored = allItems
-    .filter(
-      (i) =>
-        i.type === "file" &&
-        exts.some((e) => i.name.toLowerCase().endsWith(e)) &&
-        i.size < 60_000
-    )
-    .map((f) => {
-      const baseName = f.name.replace(/\.[^.]+$/, "").toLowerCase()
-      const entryRank = ENTRY_NAMES.indexOf(baseName)
-      return {
-        ...f,
-        score:
-          (entryRank !== -1 ? 1000 - entryRank * 50 : 0) +
-          (f.path.startsWith("src/") ? 100 : 0) +
-          Math.max(0, 100 - Math.floor(f.size / 500)),
-      }
-    })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, maxFiles)
+  // Score via Rust heuristic; fall back to local scoring if unavailable
+  const scored = await selectFiles(userId, username, lang || undefined, preFiltered, maxFiles)
 
+  let selectedPaths: string[]
+  if (scored.length > 0) {
+    selectedPaths = scored.map((s) => s.path)
+  } else {
+    // Local fallback
+    selectedPaths = preFiltered
+      .map((e) => ({ ...e, score: localScoreFile(e.path, e.size, exts) }))
+      .filter((e) => e.score >= 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxFiles)
+      .map((e) => e.path)
+  }
+
+  // Fetch content for the selected files in parallel
   const results = await Promise.all(
-    scored.map(async (f) => {
-      const content = await ghFetchRaw(
-        `${GITHUB_API}/repos/${fullName}/contents/${f.path}`,
-        token
-      )
-      return content ? { path: f.path, content } : null
+    selectedPaths.map(async (path) => {
+      const content = await ghFetchRaw(`${GITHUB_API}/repos/${fullName}/contents/${path}`, token)
+      return content ? { path, content } : null
     })
   )
 
   return results.filter((r): r is { path: string; content: string } => r !== null)
 }
 
-export async function fetchRepoContent(userId: string, repo: GithubRepo) {
+export async function fetchRepoContent(userId: string, username: string, repo: GithubRepo) {
   const token = await getGithubToken(userId)
   const lang = repo.language?.toLowerCase() ?? ""
   const isJsTs = lang === "typescript" || lang === "javascript"
@@ -217,7 +255,7 @@ export async function fetchRepoContent(userId: string, repo: GithubRepo) {
     depFilePath
       ? ghFetchRaw(`${GITHUB_API}/repos/${repo.full_name}/contents/${depFilePath}`, token)
       : Promise.resolve(null),
-    fetchSourceFiles(repo.full_name, lang, token),
+    fetchSourceFiles(repo.full_name, lang, token, userId, username),
   ])
 
   return {
@@ -385,4 +423,138 @@ export async function listContributions(
   }
 
   return results
+}
+
+// ─── GitHub Profile + Contribution Calendar ────────────────────────────────
+// Uses the GitHub GraphQL API (REST has no contribution calendar endpoint).
+
+const CONTRIBUTION_QUERY = `
+  query FetchProfile($login: String!) {
+    user(login: $login) {
+      followers { totalCount }
+      following { totalCount }
+      contributionsCollection {
+        contributionCalendar {
+          totalContributions
+          weeks {
+            contributionDays {
+              date
+              contributionCount
+              contributionLevel
+            }
+          }
+        }
+      }
+    }
+  }
+`
+
+const CONTRIBUTION_LEVEL: Record<string, 0 | 1 | 2 | 3 | 4> = {
+  NONE: 0,
+  FIRST_QUARTILE: 1,
+  SECOND_QUARTILE: 2,
+  THIRD_QUARTILE: 3,
+  FOURTH_QUARTILE: 4,
+}
+
+interface GraphQLDay {
+  date: string
+  contributionCount: number
+  contributionLevel: string
+}
+
+interface GraphQLWeek {
+  contributionDays: GraphQLDay[]
+}
+
+interface GraphQLCalendar {
+  totalContributions: number
+  weeks: GraphQLWeek[]
+}
+
+interface GraphQLUser {
+  followers: { totalCount: number }
+  following: { totalCount: number }
+  contributionsCollection: { contributionCalendar: GraphQLCalendar }
+}
+
+/**
+ * Fetches byte counts per language for a list of repos and aggregates them.
+ * Uses a token when available for higher rate limits.
+ */
+export async function fetchLanguageBytes(
+  repoFullNames: string[],
+  token?: string
+): Promise<Record<string, number>> {
+  const tok = token ?? process.env.GITHUB_PUBLIC_TOKEN
+  if (!tok || repoFullNames.length === 0) return {}
+
+  const aggregated: Record<string, number> = {}
+
+  await Promise.all(
+    repoFullNames.map(async (fullName) => {
+      try {
+        const data = await ghFetch<Record<string, number>>(
+          `/repos/${fullName}/languages`,
+          tok
+        )
+        for (const [lang, bytes] of Object.entries(data)) {
+          aggregated[lang] = (aggregated[lang] ?? 0) + bytes
+        }
+      } catch {
+        // Non-fatal: missing language data for one repo is acceptable
+      }
+    })
+  )
+
+  return aggregated
+}
+
+/**
+ * Fetches a GitHub user's contribution calendar and profile stats via GraphQL.
+ * Uses the user's OAuth token if provided, otherwise falls back to the server PAT.
+ * Returns null if neither token is available or the request fails.
+ */
+export async function fetchGithubProfile(
+  login: string,
+  oauthToken?: string
+): Promise<GithubProfile | null> {
+  const token = oauthToken ?? process.env.GITHUB_PUBLIC_TOKEN
+  if (!token) return null
+
+  try {
+    const res = await fetch(GITHUB_GRAPHQL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "User-Agent": "astra-web/0.1",
+      },
+      body: JSON.stringify({ query: CONTRIBUTION_QUERY, variables: { login } }),
+      cache: "no-store",
+    })
+
+    if (!res.ok) return null
+
+    const body = await res.json() as { data?: { user?: GraphQLUser } }
+    const user = body.data?.user
+    if (!user) return null
+
+    const calendar = user.contributionsCollection.contributionCalendar
+
+    return {
+      followers: user.followers.totalCount,
+      following: user.following.totalCount,
+      total_contributions: calendar.totalContributions,
+      contribution_weeks: calendar.weeks.map((w) => ({
+        days: w.contributionDays.map((d) => ({
+          date: d.date,
+          count: d.contributionCount,
+          level: CONTRIBUTION_LEVEL[d.contributionLevel] ?? 0,
+        })),
+      })),
+    }
+  } catch {
+    return null
+  }
 }

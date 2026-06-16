@@ -4,8 +4,8 @@ import { redirect } from "next/navigation"
 import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { baUser } from "@/lib/schema"
 import { eq } from "drizzle-orm"
+import { baUser } from "@/lib/schema"
 
 const GITHUB_API = "https://api.github.com"
 
@@ -39,10 +39,7 @@ export async function saveGithubUsername(username: string): Promise<void> {
   const { valid, error } = await validateGithubUsername(username)
   if (!valid) throw new Error(error ?? "Invalid username")
 
-  await db
-    .update(baUser)
-    .set({ githubUsername: username } as never)
-    .where(eq(baUser.id, session.user.id))
+  await db.update(baUser).set({ githubUsername: username }).where(eq(baUser.id, session.user.id))
 
   redirect("/dashboard")
 }

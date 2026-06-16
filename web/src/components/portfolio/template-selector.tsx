@@ -17,6 +17,9 @@ export function PortfolioTemplate({ data }: { data: PortfolioData }) {
   }
 }
 
+// Kept for backwards compat — public portfolio pages use PortfolioTemplate (no edit)
+export { PortfolioTemplate as default }
+
 // Picker UI used in the dashboard
 interface TemplatePickerProps {
   value: TemplateId

@@ -32,8 +32,7 @@ export function WaitlistSection() {
           </h2>
 
           <p className="text-muted-foreground text-base leading-relaxed max-w-[44ch]">
-            Join the waitlist. Be first to turn your GitHub into a portfolio
-            that shows how you actually think and build.
+            Join the waitlist. Get early access to the portfolio tool that reads your GitHub and tells the story your work deserves.
           </p>
 
           <div className="mt-2 w-full max-w-md">

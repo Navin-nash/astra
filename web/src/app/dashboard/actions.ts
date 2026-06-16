@@ -1,6 +1,7 @@
 "use server"
 
 import { redirect } from "next/navigation"
+import { revalidatePath } from "next/cache"
 import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
@@ -13,8 +14,15 @@ import {
   listOrgRepos,
   listContributions,
   resolveAndPersistGithubUsername,
+  fetchGithubProfile,
+  fetchLanguageBytes,
 } from "@/lib/github"
-import { startGeneration } from "@/lib/rust-api"
+import {
+  startGeneration,
+  publishPortfolio,
+  unpublishPortfolio,
+} from "@/lib/rust-api"
+import { sendPortfolioPublishedEmail } from "@/lib/email"
 import type { GithubRepo, GithubContribution, OrgRepo, TemplateId } from "@/types/portfolio"
 import type { RepoInput } from "@/lib/rust-api"
 
@@ -47,11 +55,11 @@ async function resolveAccessMode(userId: string): Promise<AccessMode | null> {
   }
 
   // Google user — needs github_username from onboarding
-  const user = await db.query.baUser.findFirst({
+  const userRow = await db.query.baUser.findFirst({
     where: eq(baUser.id, userId),
-    columns: { githubUsername: true } as never,
+    columns: { githubUsername: true },
   })
-  const githubUsername = (user as unknown as { githubUsername: string | null })?.githubUsername
+  const githubUsername = userRow?.githubUsername
   if (!githubUsername) return null
 
   return { type: "public", githubUsername }
@@ -118,7 +126,7 @@ export async function generatePortfolio(
 
   const reposWithContent = await Promise.all(
     selected.map(async (repo): Promise<RepoInput> => {
-      const content = await fetchRepoContent(user.id, repo).catch(() => ({
+      const content = await fetchRepoContent(user.id, mode.githubUsername, repo).catch(() => ({
         readme: null,
         packageJson: null,
         dependencyFile: null,
@@ -144,7 +152,25 @@ export async function generatePortfolio(
   )
 
   const ownedFullNames = new Set(selected.map((r) => r.full_name))
-  const contributions = await listContributions(mode.githubUsername, ownedFullNames)
+
+  // Resolve OAuth token for authenticated users (higher GraphQL rate limits)
+  let oauthToken: string | undefined
+  if (mode.type === "authenticated") {
+    const account = await db.query.baAccount.findFirst({
+      where: and(eq(baAccount.userId, user.id), eq(baAccount.providerId, "github")),
+      columns: { accessToken: true },
+    })
+    oauthToken = account?.accessToken ?? undefined
+  }
+
+  // Fetch contributions, GitHub profile, and language bytes all in parallel
+  const selectedFullNames = selected.map((r) => r.full_name)
+  const [contributions, githubProfile, languageBytes] = await Promise.all([
+    listContributions(mode.githubUsername, ownedFullNames),
+    fetchGithubProfile(mode.githubUsername, oauthToken),
+    fetchLanguageBytes(selectedFullNames, oauthToken),
+  ])
+
   const contributionInputs = contributions.map((c) => ({
     title: c.title,
     html_url: c.html_url,
@@ -160,7 +186,29 @@ export async function generatePortfolio(
     username: mode.githubUsername,
     avatar_url: user.image ?? undefined,
     contributions: contributionInputs,
+    github_profile: githubProfile
+      ? { ...githubProfile, language_bytes: Object.keys(languageBytes).length > 0 ? languageBytes : undefined }
+      : undefined,
   })
 
   return { jobId: job.id }
+}
+
+// ─── Portfolio publish / unpublish ─────────────────────────────────────────
+
+export async function togglePublished(published: boolean): Promise<void> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session) redirect("/login")
+
+  if (published) {
+    await publishPortfolio()
+    const { user } = session
+    const mode = await resolveAccessMode(user.id)
+    if (mode && user.email) {
+      sendPortfolioPublishedEmail(user.email, user.name ?? "there", mode.githubUsername).catch(() => {})
+    }
+  } else {
+    await unpublishPortfolio()
+  }
+  revalidatePath("/dashboard")
 }

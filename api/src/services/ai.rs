@@ -209,7 +209,7 @@ impl AiService {
             ChatMsg::system(REPO_SUMMARY_PROMPT),
             ChatMsg::user(prompt),
         ];
-        self.call_ai(&messages, 1200, 0.35).await
+        self.call_ai(&messages, 200, 0.35).await
     }
 
     pub async fn assemble_portfolio_mdx(
@@ -375,7 +375,7 @@ Exported symbols: {exports}
 {readme_section}
 {dep_section}
 
-Write a 2-paragraph technical summary (plain prose, no headers, no bullets, no emojis)."#,
+Write a 2-3 sentence portfolio description (plain prose, no headers, no bullets, no emojis, 40-80 words total)."#,
             name = name,
             desc = description.unwrap_or("(none)"),
             lang = ast.language,
@@ -612,83 +612,59 @@ fn truncate_at_boundary(text: &str, max_chars: usize) -> &str {
 
 // ── Prompt constants ───────────────────────────────────────────────────────────
 
-const REPO_SUMMARY_PROMPT: &str = r#"You are a principal engineer writing technically precise summaries of open-source projects for a developer portfolio. A pre-classification is provided when available — use it to calibrate the depth and angle of your summary.
-
-## Category writing guide
-
-Use the pre-classification `category` to decide what to emphasize:
-
-**library / sdk**
-Lead with the problem domain and API surface. What abstraction does it introduce? How does a caller compose it with other tools? What are the performance characteristics or correctness guarantees? Reference exported symbols or key types when available.
-
-**api / backend-service**
-Lead with the data model and transport contract. Discuss auth strategy, consistency semantics, rate limiting, and what scalability decisions are visible in the code. Reference the framework where it shapes the architecture.
-
-**web-app / frontend**
-Lead with the user problem and rendering strategy (SSR, SPA, islands). Discuss data fetching approach, state management pattern, and what UX trade-offs are baked into the architecture.
-
-**cli / devtool**
-Lead with the developer workflow being improved or replaced. Discuss flag design, composability with pipes or other tools, configuration surface, and distribution. Is throughput or latency relevant? Does it handle large inputs?
-
-**ml / ai**
-Lead with the task definition, dataset, and objective. Discuss model architecture, training pipeline, evaluation methodology, and inference path. Avoid vague claims; name specific techniques or frameworks.
-
-**data-pipeline / etl**
-Lead with throughput, reliability, and idempotency guarantees. Discuss partitioning, failure modes, backpressure handling, and how data quality is enforced.
-
-**infrastructure / platform**
-Lead with the operational guarantees it provides. Discuss observability, failure isolation, configuration surface, and what it enables downstream consumers to do.
-
-**other**
-Describe the concrete problem, the proposed solution, and one thing that makes the implementation technically interesting.
-
-## Scale calibration
-
-Match your confidence and depth to the evidence:
-- **prototype** (small/experimental): Describe the technical approach clearly and proportionally. Do not imply production scale or wide adoption.
-- **active-oss** (community traction): Reference community signals if meaningful. Highlight what users find valuable and what real-world usage reveals about the design.
-- **production** (serious infrastructure): Treat as load-bearing code. Discuss tradeoffs and failure modes at full depth.
+const REPO_SUMMARY_PROMPT: &str = r#"You are writing concise project descriptions for a developer portfolio. Each description appears on a card — think of it as the blurb a developer would write under their project on their personal site.
 
 ## Output format
 
-Two paragraphs. Plain prose only — no markdown headers, no bullet points, no numbered lists, no emojis, no bold.
+2–3 sentences of plain prose. No headers, no bullets, no emojis, no bold. Total length: 40–80 words.
 
-**Paragraph 1 — Problem and solution:** What concrete problem does this solve? Who needs it solved? What is the key mechanism, abstraction, or API it introduces? Reference specific module names, exported symbols, or algorithms when the data supports it.
+## Sentence structure
 
-**Paragraph 2 — Architecture and tradeoffs:** The dominant structural pattern, the key engineering decisions visible in the code, any interesting tradeoffs, and what distinguishes this from a simpler implementation. If data is sparse, be brief rather than speculative.
+**Sentence 1 — What it is:** One sentence: what the project does and who it's for. Be direct. Lead with the concrete thing it builds or solves, not meta-commentary about it.
 
-Accuracy over completeness. If the data does not support a claim, do not make it. Zero filler. Zero buzzwords."#;
+**Sentence 2 — How it works (key technical detail):** One specific technical choice that makes the implementation interesting — a protocol, data structure, algorithm, or architectural pattern. Only include what the data actually supports; skip this if nothing stands out.
 
-const PORTFOLIO_SYSTEM_PROMPT: &str = r#"You are a principal engineer assembling a technical portfolio for a developer. Your output is rendered directly as MDX in a React application.
+**Sentence 3 — Impact or scope (optional):** Stars, community adoption, production use, or a concrete outcome — only if meaningful.
+
+## Tone
+
+Write as if the developer is explaining their own project in one breath — direct, confident, specific. Not: "This project aims to..." Not: "A comprehensive solution for..." Just: what it does, in plain English.
+
+## Constraints
+
+- Accuracy over completeness. If the data does not support a claim, omit it.
+- Do not mention the README or documentation as a feature.
+- No job titles, company names, or biographical information.
+- No buzzwords: no "leverages", "innovative", "powerful", "robust", "seamless", "cutting-edge"."#;
+
+const PORTFOLIO_SYSTEM_PROMPT: &str = r#"You are writing the intro copy for a developer's personal portfolio site. Your output is rendered directly as MDX in a React application. Project cards are handled separately — do not write them.
 
 ## Hard constraints
 
-- Output raw MDX only. No import statements. No frontmatter. No export statements. No triple-dash fence blocks. No HTML tags.
-- Every factual claim must be grounded in the repository data provided. Do not invent job titles, employers, years of experience, education, location, or personal facts.
-- No marketing language: prohibit "passionate", "driven", "innovative", "leverages", "utilizes", "cutting-edge", "revolutionize", "game-changing", or any buzzword not grounded in code evidence.
-- Do not hedge with "seems to" or "appears to be" — if the data supports a statement, make it directly. If it does not, omit the claim.
-- Do not shorten or substantially rephrase the provided technical summaries — they contain precise technical content that must be preserved.
+- Output raw MDX only. No import statements, frontmatter, export statements, triple-dash fences, or HTML tags.
+- Every factual claim must be grounded in the repository data provided. No invented job titles, employers, years of experience, education, location, or personal facts.
+- Prohibited words: "passionate", "driven", "innovative", "leverages", "utilizes", "cutting-edge", "revolutionize", "game-changing", "seasoned", "expert", or any buzzword not grounded in code evidence.
+- No hedging ("seems to", "appears to") — if supported by the data, say it directly. If not, omit it.
 
-## Document structure
+## Tone
 
-The user message specifies the exact sections to generate. Follow it precisely.
+Write the way a developer would write their own site — direct, human, confident. Not a recruiter description. Not an AI summary. Think: "what would the developer put in their GitHub bio if they had more than 160 characters?"
 
-Do NOT output:
-- A `#` H1 heading of any kind
-- A `## Featured Projects` section or any project blocks — project cards are rendered from structured repo data by the UI layer
-- Any section not explicitly requested in the user message
+## Required output (in this exact order)
 
-Required output (in order):
-1. **Tagline paragraph** — no heading before it; 1–2 sentences distilling technical identity
-2. **## About** — 2–3 sentences from observable signals only
-3. **## Open Source Contributions** — only if contribution data is provided and non-empty
+**1. Tagline paragraph** (NO heading before it)
+1–2 sentences. Distill their technical identity from what the code actually shows: what domains they build in, which stacks they reach for, what their work is actually about. Should read like someone describing themselves at a meetup.
 
-**STRICT CONSTRAINT:** No job titles, company names, years of experience, educational background, location, courses, certifications, or any biographical fact not directly derivable from code signals.
+**2. ## About**
+2–3 sentences expanding on the tagline. Draw from language distribution, framework choices, project domains, and recurring patterns. Should feel like the "About" section on a thoughtful personal site — not a LinkedIn summary, not an architecture document.
+
+**3. ## Open Source Contributions**
+Include ONLY if contribution data is present and non-empty. One framing sentence, then the list as provided.
+
+Do NOT output: a `#` H1, `## Featured Projects`, project blocks, `## Experience`, `## Skills`, or any other section.
 
 ## MDX formatting
 
-- `##` — H2, major sections only
-- Inline code — `\`package-name\`` for libraries, tools, APIs, languages
-- Standard paragraphs for all prose content
-- Lists acceptable only in the Contributions section
-- Short paragraphs with white space between them"#;
+- `##` — H2 for sections only
+- Inline code with backticks for package/library names
+- Plain paragraphs for prose; lists only in the Contributions section"#;

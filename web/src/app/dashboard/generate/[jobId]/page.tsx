@@ -2,8 +2,7 @@ import { redirect } from "next/navigation"
 import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
 import { GenerationProgress } from "@/components/dashboard/generation-progress"
-import Link from "next/link"
-import { AstraLogo } from "@/components/ui/astra-logo"
+import { AppHeader } from "@/components/layout/app-header"
 
 interface Props {
   params: Promise<{ jobId: string }>
@@ -17,12 +16,13 @@ export default async function GeneratePage({ params }: Props) {
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-background">
-      {/* Nav */}
-      <header className="border-b border-border px-6 h-14 flex items-center">
-        <Link href="/dashboard">
-          <AstraLogo variant="full" height={24} />
-        </Link>
-      </header>
+      <AppHeader
+        user={{
+          name: session.user.name ?? session.user.email,
+          email: session.user.email,
+          image: session.user.image,
+        }}
+      />
 
       <div className="flex flex-1 items-center justify-center px-6 py-16">
         <GenerationProgress

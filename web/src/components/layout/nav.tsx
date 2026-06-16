@@ -26,7 +26,7 @@ export function Nav() {
         className={`flex items-center gap-6 px-5 h-14 rounded-full transition-all duration-300 ${
           scrolled
             ? "bg-background/90 backdrop-blur-md border border-border shadow-sm shadow-black/8"
-            : "bg-transparent border border-transparent"
+            : "bg-transparent border-0"
         }`}
       >
         {/* Logo */}
@@ -35,10 +35,9 @@ export function Nav() {
             src="/favicon.svg"
             alt=""
             height={32}
-            width={96}
+            width={32}
             aria-hidden
-            className="h-8 w-auto"
-            style={{ width: "auto" }}
+            className="h-8 w-8"
           />
         </Link>
 
@@ -52,7 +51,11 @@ export function Nav() {
             <Link
               key={label}
               href={href}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200"
+              className={`text-sm transition-colors duration-300 ${
+                scrolled
+                  ? "text-muted-foreground hover:text-foreground"
+                  : "text-white/70 hover:text-white"
+              }`}
             >
               {label}
             </Link>

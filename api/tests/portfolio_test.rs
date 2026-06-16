@@ -7,7 +7,7 @@ use tower::ServiceExt;
 
 mod common;
 
-#[sqlx::test(migrations = "migrations")]
+#[sqlx::test]
 async fn test_get_nonexistent_portfolio_returns_404(pool: PgPool) {
     let (app, _state) = common::test_app(pool).await;
 
@@ -24,14 +24,22 @@ async fn test_get_nonexistent_portfolio_returns_404(pool: PgPool) {
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
-#[sqlx::test(migrations = "migrations")]
+#[sqlx::test]
 async fn test_unpublished_portfolio_not_publicly_accessible(pool: PgPool) {
     use astra_api::db;
 
     let (app, state) = common::test_app(pool.clone()).await;
     let (user, _token) = common::create_test_user(&pool).await;
 
-    db::portfolios::upsert(&pool, user.id).await.unwrap();
+    db::portfolios::upsert(
+        &pool,
+        &user.id,
+        &user.username,
+        None,
+        &serde_json::Value::Object(Default::default()),
+    )
+    .await
+    .unwrap();
 
     let response = app
         .oneshot(
@@ -52,7 +60,7 @@ async fn test_unpublished_portfolio_not_publicly_accessible(pool: PgPool) {
     drop(state);
 }
 
-#[sqlx::test(migrations = "migrations")]
+#[sqlx::test]
 async fn test_publish_then_portfolio_is_accessible(pool: PgPool) {
     use astra_api::db;
     use axum::body::to_bytes;
@@ -60,9 +68,21 @@ async fn test_publish_then_portfolio_is_accessible(pool: PgPool) {
     let (app, _state) = common::test_app(pool.clone()).await;
     let (user, token) = common::create_test_user(&pool).await;
 
-    let portfolio = db::portfolios::upsert(&pool, user.id).await.unwrap();
-    db::portfolios::update_mdx(&pool, portfolio.id, "# Hello World").await.unwrap();
-    db::portfolios::set_published(&pool, user.id, true).await.unwrap();
+    let portfolio = db::portfolios::upsert(
+        &pool,
+        &user.id,
+        &user.username,
+        None,
+        &serde_json::Value::Object(Default::default()),
+    )
+    .await
+    .unwrap();
+    db::portfolios::update_mdx(&pool, portfolio.id, "# Hello World")
+        .await
+        .unwrap();
+    db::portfolios::set_published(&pool, &user.id, true)
+        .await
+        .unwrap();
 
     let response = app
         .oneshot(
@@ -82,7 +102,7 @@ async fn test_publish_then_portfolio_is_accessible(pool: PgPool) {
     assert_eq!(json["mdx_content"], "# Hello World");
 }
 
-#[sqlx::test(migrations = "migrations")]
+#[sqlx::test]
 async fn test_update_portfolio_content(pool: PgPool) {
     use astra_api::db;
     use axum::body::to_bytes;
@@ -90,7 +110,15 @@ async fn test_update_portfolio_content(pool: PgPool) {
     let (app, _state) = common::test_app(pool.clone()).await;
     let (user, token) = common::create_test_user(&pool).await;
 
-    db::portfolios::upsert(&pool, user.id).await.unwrap();
+    db::portfolios::upsert(
+        &pool,
+        &user.id,
+        &user.username,
+        None,
+        &serde_json::Value::Object(Default::default()),
+    )
+    .await
+    .unwrap();
 
     let response = app
         .oneshot(
@@ -99,7 +127,7 @@ async fn test_update_portfolio_content(pool: PgPool) {
                 .uri("/api/portfolio")
                 .header("Authorization", format!("Bearer {token}"))
                 .header("Content-Type", "application/json")
-                .body(Body::from(r#"{"mdx_content": "# Updated Portfolio"}"#))
+                .body(Body::from(r##"{"mdx_content": "# Updated Portfolio"}"##))
                 .unwrap(),
         )
         .await

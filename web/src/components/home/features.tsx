@@ -26,11 +26,11 @@ interface FeatureStory {
 const stories: FeatureStory[] = [
   {
     id: 1,
-    title: "Code intelligence, not README scanning",
-    body: "Astra uses AST-level parsing to understand your actual codebase. It identifies frameworks, patterns, and architectural decisions you never had to describe — automatically.",
+    title: "Reads code structure, not just README files",
+    body: "Astra uses AST-level parsing to understand how you actually build. It identifies frameworks, patterns, and architectural decisions from the code itself — no manual descriptions required.",
     name: "AST Analysis Engine",
     role: "Core technology",
-    image: "https://picsum.photos/seed/astra-code-analysis/300/400",
+    image: "/images/features/ast-analysis.png",
     metrics: [
       { value: "47+", label: "Symbols parsed per repo", sub: "Exports, components, hooks" },
       { value: "12+", label: "Frameworks auto-detected", sub: "From Next.js to FastAPI" },
@@ -38,11 +38,11 @@ const stories: FeatureStory[] = [
   },
   {
     id: 2,
-    title: "AI that understands how engineers build",
-    body: "Not a README summarizer. Astra generates technical narratives that explain your architecture, your patterns, and your depth — in plain language hiring managers actually read.",
+    title: "Writes technical narratives, not marketing copy",
+    body: "Astra generates project write-ups that explain architecture, design decisions, and engineering depth in plain language. The kind of context a hiring engineer actually needs to evaluate you.",
     name: "Narrative Engine",
     role: "AI layer",
-    image: "https://picsum.photos/seed/astra-portfolio-preview/300/400",
+    image: "/images/features/narrative-engine.png",
     metrics: [
       { value: "90s", label: "Average generation time", sub: "End-to-end analysis" },
       { value: "5", label: "Repos per portfolio", sub: "Fully configurable" },
@@ -50,11 +50,11 @@ const stories: FeatureStory[] = [
   },
   {
     id: 3,
-    title: "From repo to live portfolio in one click",
-    body: "Connect GitHub, select repos, publish. Your portfolio is live at useastra.qzz.io/you within 60 seconds. No config files. No theme selection. No writing copy from scratch.",
+    title: "Live URL in under 90 seconds, zero config",
+    body: "Connect GitHub, select repos, publish. Your portfolio is live at astra.build/u/you within 60 seconds. No YAML files, no theme selection, no writing copy from scratch.",
     name: "Instant Deploy",
     role: "Distribution layer",
-    image: "https://picsum.photos/seed/astra-deploy-live/300/400",
+    image: "/images/features/instant-deploy.png",
     metrics: [
       { value: "60s", label: "Time to live URL", sub: "From OAuth to published" },
       { value: "0", label: "Config files needed", sub: "Zero setup required" },
@@ -129,8 +129,8 @@ export function Features() {
           className="max-w-2xl mb-16"
         >
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground leading-tight" style={{ textWrap: "balance" }}>
-            Built for engineers,{" "}
-            <span className="text-muted-foreground font-normal">not just job seekers.</span>
+            The portfolio that reads your code,{" "}
+            <span className="text-muted-foreground font-normal">not just your bio.</span>
           </h2>
         </motion.div>
 
@@ -161,7 +161,7 @@ export function Features() {
                     alt={story.title}
                     width={300}
                     height={400}
-                    className="aspect-[3/4] h-auto w-full max-w-[200px] rounded-xl object-cover ring-1 ring-border hover:scale-[1.02] transition-transform duration-300 shrink-0"
+                    className="aspect-3/4 h-auto w-full max-w-50 rounded-xl object-cover ring-1 ring-border hover:scale-[1.02] transition-transform duration-300 shrink-0"
                     loading="lazy"
                   />
                   <figure className="flex flex-col justify-between gap-6 text-left">

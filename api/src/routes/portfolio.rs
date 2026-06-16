@@ -38,13 +38,21 @@ pub async fn get_public(
 
     let repos = db::repositories::find_by_portfolio(&state.db, portfolio.id).await?;
 
+    // Extract github_profile from theme_config (stored there without a migration),
+    // then expose it as a top-level field so the frontend can access it directly.
+    let mut theme_config = portfolio.theme_config.clone();
+    let github_profile = theme_config
+        .as_object_mut()
+        .and_then(|m| m.remove("github_profile"));
+
     let payload = json!({
         "username": portfolio.username,
         "avatar_url": portfolio.avatar_url,
         "mdx_content": portfolio.mdx_content,
-        "theme_config": portfolio.theme_config,
+        "theme_config": theme_config,
         "last_synced_at": portfolio.last_synced_at,
         "repositories": repos,
+        "github_profile": github_profile,
     });
 
     if let Ok(mut conn) = state.redis_conn().await {
@@ -127,4 +135,35 @@ pub async fn unpublish(
         .invalidate_portfolio_cache(&current_user.username, Some(&current_user.id))
         .await;
     Ok(Json(json!({ "published": false })))
+}
+
+/// Authenticated preview — returns the full portfolio payload (repos + github_profile)
+/// regardless of `is_published`, so the owner can preview before going live.
+pub async fn get_preview(
+    State(state): State<Arc<AppState>>,
+    Extension(current_user): Extension<CurrentUser>,
+) -> Result<Json<serde_json::Value>> {
+    let portfolio = db::portfolios::find_by_user_id(&state.db, &current_user.id)
+        .await?
+        .ok_or_else(|| {
+            AppError::NotFound("no portfolio yet — trigger a generation first".into())
+        })?;
+
+    let repos = db::repositories::find_by_portfolio(&state.db, portfolio.id).await?;
+
+    let mut theme_config = portfolio.theme_config.clone();
+    let github_profile = theme_config
+        .as_object_mut()
+        .and_then(|m| m.remove("github_profile"));
+
+    Ok(Json(json!({
+        "username": portfolio.username,
+        "avatar_url": portfolio.avatar_url,
+        "mdx_content": portfolio.mdx_content,
+        "theme_config": theme_config,
+        "last_synced_at": portfolio.last_synced_at,
+        "repositories": repos,
+        "github_profile": github_profile,
+        "is_published": portfolio.is_published,
+    })))
 }

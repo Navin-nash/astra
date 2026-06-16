@@ -1,5 +1,24 @@
 export type TemplateId = "void" | "minimal" | "terminal"
 
+export interface ContributionDay {
+  date: string
+  count: number
+  level: 0 | 1 | 2 | 3 | 4
+}
+
+export interface ContributionWeek {
+  days: ContributionDay[]
+}
+
+export interface GithubProfile {
+  followers: number
+  following: number
+  total_contributions: number
+  contribution_weeks: ContributionWeek[]
+  /** Aggregate byte counts per language across all selected repos */
+  language_bytes?: Record<string, number>
+}
+
 export interface AstMetadata {
   language: string
   exported_symbols: string[]
@@ -39,6 +58,7 @@ export interface PortfolioData {
   }
   last_synced_at: string | null
   repositories: PortfolioRepo[]
+  github_profile?: GithubProfile
 }
 
 export interface GithubRepo {

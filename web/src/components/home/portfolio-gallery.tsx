@@ -3,12 +3,13 @@
 import * as React from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { ExpandableCard } from "@/components/expandable-card";
+import { DiaTextReveal } from "@/components/ui/dia-text-reveal";
 
 const portfolioExamples = [
   {
     title: "Full-Stack Engineer",
     description: "Next.js + PostgreSQL",
-    src: "https://picsum.photos/seed/portfolio-fullstack-dev/400/300",
+    src: "/images/portfolio/fullstack.png",
     children: (
       <div className="space-y-4 text-sm text-muted-foreground leading-relaxed">
         <p>
@@ -36,7 +37,7 @@ const portfolioExamples = [
   {
     title: "ML Engineer",
     description: "Python + PyTorch",
-    src: "https://picsum.photos/seed/portfolio-ml-engineer/400/300",
+    src: "/images/portfolio/ml-engineer.png",
     children: (
       <div className="space-y-4 text-sm text-muted-foreground leading-relaxed">
         <p>
@@ -64,7 +65,7 @@ const portfolioExamples = [
   {
     title: "Systems Engineer",
     description: "Rust + Go",
-    src: "https://picsum.photos/seed/portfolio-systems-rust/400/300",
+    src: "/images/portfolio/systems-engineer.png",
     children: (
       <div className="space-y-4 text-sm text-muted-foreground leading-relaxed">
         <p>
@@ -108,7 +109,13 @@ export function PortfolioGallery() {
         >
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground leading-tight" style={{ textWrap: "balance" }}>
             What Astra builds{" "}
-            <span className="text-muted-foreground font-normal">for you.</span>
+            <DiaTextReveal
+              text="for you."
+              textColor="var(--muted-foreground)"
+              startOnView
+              once
+              className="font-normal"
+            />
           </h2>
           <p className="mt-4 text-muted-foreground max-w-[44ch] leading-relaxed">
             Click any card to see how Astra shapes your code into a technical

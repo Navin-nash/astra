@@ -148,6 +148,7 @@ export const AnimatedThemeToggler = ({
   const isDark = isControlled ? theme === "dark" : internalIsDark
   const buttonRef = useRef<HTMLButtonElement>(null)
 
+
   useEffect(() => {
     if (isControlled) return
 

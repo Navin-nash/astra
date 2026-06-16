@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { nextCookies } from "better-auth/next-js"
 import { db } from "./db"
 import * as authSchema from "./auth-schema"
+import { sendWelcomeEmail } from "./email"
 
 export const auth = betterAuth({
   appName: "Astra",
@@ -31,20 +32,6 @@ export const auth = betterAuth({
     },
   },
 
-  // ─── Extended user fields ─────────────────────────────────────────────────
-  // github_username is added via migration 004_github_username.sql.
-  // Declared here so Better Auth includes it in session/user inference.
-  user: {
-    additionalFields: {
-      githubUsername: {
-        type: "string",
-        required: false,
-        defaultValue: null,
-        input: true,
-      },
-    },
-  },
-
   // ─── Session ──────────────────────────────────────────────────────────────
   session: {
     expiresIn: 60 * 60 * 24 * 30,  // 30 days
@@ -52,7 +39,7 @@ export const auth = betterAuth({
     cookieCache: {
       enabled: true,
       maxAge: 60 * 5,
-      strategy: "jwe",
+      strategy: "compact",
     },
   },
 
@@ -75,6 +62,19 @@ export const auth = betterAuth({
       "/api/auth/sign-in/social": { window: 60, max: 10 },
       "/api/auth/callback/github": { window: 60, max: 10 },
       "/api/auth/callback/google": { window: 60, max: 10 },
+    },
+  },
+
+  // ─── Database hooks ───────────────────────────────────────────────────────
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user) => {
+          if (user.email) {
+            sendWelcomeEmail(user.email, user.name ?? "there").catch(() => {})
+          }
+        },
+      },
     },
   },
 

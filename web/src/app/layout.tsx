@@ -46,6 +46,7 @@ export default function RootLayout({
       lang="en"
       className={`${satoshi.variable} ${geistMono.variable}`}
       suppressHydrationWarning
+      data-scroll-behavior="smooth"
     >
       <body className="min-h-full antialiased" suppressHydrationWarning>
       <TooltipProvider>

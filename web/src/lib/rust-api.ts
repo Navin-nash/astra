@@ -1,3 +1,4 @@
+import "server-only"
 import { SignJWT } from "jose"
 import { headers } from "next/headers"
 import { auth } from "./auth"
@@ -47,9 +48,11 @@ export interface PublicPortfolio {
   theme_config: Record<string, unknown>
   last_synced_at?: string
   repositories: unknown[]
+  github_profile?: import("@/types/portfolio").GithubProfile
+  is_published?: boolean
 }
 
-async function rustJwt(userId: string, username: string): Promise<string> {
+export async function rustJwt(userId: string, username: string): Promise<string> {
   return new SignJWT({ sub: userId, username })
     .setProtectedHeader({ alg: "HS256" })
     .setExpirationTime("10m")
@@ -72,12 +75,53 @@ export interface ContributionInput {
   labels: string[]
 }
 
+import type { GithubProfile } from "@/types/portfolio"
+
 interface GenerateOptions {
   template?: string
   user_id: string
   username: string
   avatar_url?: string
   contributions?: ContributionInput[]
+  github_profile?: GithubProfile
+}
+
+export interface TreeEntryInput {
+  path: string
+  size: number
+}
+
+export interface ScoredFileResult {
+  path: string
+  score: number
+}
+
+/**
+ * Asks the Rust API to score a flat file tree and return the top candidates.
+ * Uses a pre-computed JWT (userId + username) rather than a session lookup so
+ * this can be called from non-session server contexts (e.g. github.ts helpers).
+ */
+export async function selectFiles(
+  userId: string,
+  username: string,
+  language: string | undefined,
+  fileTree: TreeEntryInput[],
+  maxFiles = 6
+): Promise<ScoredFileResult[]> {
+  try {
+    const token = await rustJwt(userId, username)
+    const res = await fetch(`${RUST_API_URL}/api/select-files`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ language, file_tree: fileTree, max_files: maxFiles }),
+      cache: "no-store",
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.selected ?? []
+  } catch {
+    return []
+  }
 }
 
 export async function startGeneration(
@@ -104,6 +148,7 @@ export async function startGeneration(
       theme_config: opts?.template ? { template: opts.template } : { template: "void" },
       repos,
       contributions: opts?.contributions ?? [],
+      github_profile: opts?.github_profile ?? null,
     }),
     cache: "no-store",
   })
@@ -152,16 +197,64 @@ export async function getMyPortfolio() {
 export async function publishPortfolio(): Promise<void> {
   const session = await getSessionOrThrow()
   const { user } = session
-
   const token = await rustJwt(user.id, user.name ?? "")
-
   const res = await fetch(`${RUST_API_URL}/api/portfolio/publish`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   })
-
   if (!res.ok) throw new Error("Failed to publish portfolio")
+}
+
+export async function unpublishPortfolio(): Promise<void> {
+  const session = await getSessionOrThrow()
+  const { user } = session
+  const token = await rustJwt(user.id, user.name ?? "")
+  const res = await fetch(`${RUST_API_URL}/api/portfolio/unpublish`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to unpublish portfolio")
+}
+
+export async function getMyPortfolioPreview(): Promise<PublicPortfolio | null> {
+  const session = await getSessionOrThrow()
+  const { user } = session
+  const token = await rustJwt(user.id, user.name ?? "")
+
+  const res = await fetch(`${RUST_API_URL}/api/portfolio/preview`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  })
+
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error("Failed to fetch portfolio preview")
+  return res.json()
+}
+
+export async function updateMyPortfolio(
+  mdxContent?: string,
+  themeConfig?: Record<string, unknown>
+): Promise<void> {
+  const session = await getSessionOrThrow()
+  const { user } = session
+  const token = await rustJwt(user.id, user.name ?? "")
+
+  const res = await fetch(`${RUST_API_URL}/api/portfolio`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      mdx_content: mdxContent,
+      theme_config: themeConfig,
+    }),
+    cache: "no-store",
+  })
+
+  if (!res.ok) throw new Error("Failed to update portfolio")
 }
 
 export async function getPublicPortfolio(
