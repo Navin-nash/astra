@@ -39,17 +39,27 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       images: [
         {
           url: ogImage,
+          secureUrl: ogImage,
           width: 400,
           height: 400,
-          alt: `${username}'s avatar`,
+          alt: `${username}'s developer portfolio — powered by Astra`,
+          type: "image/png",
         },
       ],
     },
+    // Twitter/X, Slack, Discord, WhatsApp, Facebook all read these
     twitter: {
       card: "summary",
+      site: "@useastra",
+      creator: "@useastra",
       title,
       description,
-      images: [ogImage],
+      images: [
+        {
+          url: ogImage,
+          alt: `${username}'s developer portfolio — powered by Astra`,
+        },
+      ],
     },
     robots: { index: true, follow: true },
   }

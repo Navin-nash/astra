@@ -16,10 +16,21 @@ export const metadata: Metadata = {
   title: `${siteConfig.name} — ${siteConfig.tagline}`,
   description: siteConfig.description,
   alternates: { canonical: siteConfig.url },
+  // Inherits full OG + Twitter cards from root layout; override only what differs
   openGraph: {
     url: siteConfig.url,
     title: `${siteConfig.name} — ${siteConfig.tagline}`,
     description: siteConfig.shortDescription,
+    images: [
+      {
+        url: siteConfig.ogImage,
+        secureUrl: siteConfig.ogImage,
+        width: 1200,
+        height: 630,
+        alt: `${siteConfig.name} — Turn your GitHub into a stunning developer portfolio in under 60 seconds`,
+        type: "image/png",
+      },
+    ],
   },
 };
 

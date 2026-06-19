@@ -23,11 +23,21 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const OG_TITLE = `${siteConfig.name} — ${siteConfig.tagline}`;
+const OG_IMAGE = {
+  url: siteConfig.ogImage,
+  secureUrl: siteConfig.ogImage,
+  width: 1200,
+  height: 630,
+  alt: `${siteConfig.name} — Turn your GitHub into a stunning developer portfolio in under 60 seconds`,
+  type: "image/png",
+};
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
 
   title: {
-    default: `${siteConfig.name} — ${siteConfig.tagline}`,
+    default: OG_TITLE,
     template: `%s — ${siteConfig.name}`,
   },
 
@@ -65,37 +75,44 @@ export const metadata: Metadata = {
     apple: "/favicon.svg",
   },
 
-  // ── OpenGraph ─────────────────────────────────────────────────────────
+  // ── Theme color (Discord, browsers) ───────────────────────────────────
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#09090b" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+  ],
+
+  // ── OpenGraph (Facebook, WhatsApp, Slack, Instagram, Discord) ─────────
   openGraph: {
     type: "website",
     locale: "en_US",
     url: siteConfig.url,
     siteName: siteConfig.name,
-    title: `${siteConfig.name} — ${siteConfig.tagline}`,
+    title: OG_TITLE,
     description: siteConfig.shortDescription,
-    images: [
-      {
-        url: siteConfig.ogImage,
-        width: 1200,
-        height: 630,
-        alt: `${siteConfig.name} — ${siteConfig.tagline}`,
-        type: "image/png",
-      },
-    ],
+    images: [OG_IMAGE],
   },
 
   // ── Twitter / X ───────────────────────────────────────────────────────
   twitter: {
     card: "summary_large_image",
-    title: `${siteConfig.name} — ${siteConfig.tagline}`,
-    description: siteConfig.shortDescription,
-    images: [siteConfig.ogImage],
+    site: "@useastra",
     creator: "@useastra",
+    title: OG_TITLE,
+    description: siteConfig.shortDescription,
+    images: [OG_IMAGE],
   },
 
   // ── App metadata ──────────────────────────────────────────────────────
   applicationName: siteConfig.name,
   category: "technology",
+
+  // ── Platform-specific extras ──────────────────────────────────────────
+  other: {
+    // WhatsApp reads og: tags; no extra tags needed, but ensure fast load
+    "format-detection": "telephone=no",
+    // Discord accent color (falls back to themeColor)
+    "discord:accent-color": "#09090b",
+  },
 };
 
 // ── JSON-LD structured data (AEO + rich results) ──────────────────────────

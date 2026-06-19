@@ -11,10 +11,33 @@ export const metadata: Metadata = {
     "astra getting started",
   ],
   openGraph: {
+    type: "article",
     title: "Astra Documentation",
     description:
       "Learn how to connect GitHub and ship a technical portfolio in under 60 seconds.",
-    type: "article",
+    images: [
+      {
+        url: "https://useastra.tech/og.png",
+        secureUrl: "https://useastra.tech/og.png",
+        width: 1200,
+        height: 630,
+        alt: "Astra Documentation — GitHub portfolio in under 60 seconds",
+        type: "image/png",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    site: "@useastra",
+    title: "Astra Documentation",
+    description:
+      "Learn how to connect GitHub and ship a technical portfolio in under 60 seconds.",
+    images: [
+      {
+        url: "https://useastra.tech/og.png",
+        alt: "Astra Documentation — GitHub portfolio in under 60 seconds",
+      },
+    ],
   },
 };
 
