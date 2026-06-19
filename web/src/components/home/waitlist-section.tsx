@@ -15,12 +15,12 @@ const benefits = [
     body: "Early users talk directly to the builder. Your feedback shapes what ships next.",
   },
   {
-    title: "Locked-in early pricing",
-    body: "The price you join at is the price you keep — even as the product grows.",
-  },
-  {
     title: "Portfolio in under 60 seconds",
     body: "On day one: connect GitHub, pick repos, get a live portfolio URL. That's the whole flow.",
+  },
+  {
+    title: "Always up to date",
+    body: "Push new code and your portfolio updates automatically — no manual edits needed.",
   },
 ];
 

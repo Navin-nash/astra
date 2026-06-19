@@ -56,10 +56,6 @@ const faqs = [
     q: "How is this different from just linking my GitHub profile?",
     a: "A GitHub profile shows a grid of repositories and contribution heatmaps. Astra reads the code inside those repositories and generates a technical narrative that explains architecture, design decisions, and engineering depth. It translates what you built into language that a hiring engineer or technical founder can evaluate at a glance.",
   },
-  {
-    q: "Is Astra free?",
-    a: "The waitlist and early access period are free. Pricing will be announced before the public launch — waitlist members lock in their rate at signup, which stays the same even as the product grows.",
-  },
 ];
 
 function FaqItem({ q, a }: { q: string; a: string }) {
