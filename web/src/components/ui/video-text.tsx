@@ -13,8 +13,8 @@ export interface VideoTextProps {
   children: ReactNode
   fontSize?: string | number
   fontWeight?: string | number
-  textAnchor?: string
-  dominantBaseline?: string
+  textAnchor?: React.SVGAttributes<SVGTextElement>["textAnchor"]
+  dominantBaseline?: React.SVGAttributes<SVGTextElement>["dominantBaseline"]
   fontFamily?: string
   as?: ElementType
 }
