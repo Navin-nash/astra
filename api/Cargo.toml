@@ -37,7 +37,7 @@ sqlx = { version = "0.8", features = [
 redis = { version = "0.26", features = ["tokio-comp", "tokio-rustls-comp", "connection-manager"] }
 
 # HTTP client (replaces async-openai — avoids upstream deserialization quirks)
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
