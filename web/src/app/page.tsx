@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+import { siteConfig } from "@/lib/site";
 import { Nav } from "@/components/layout/nav";
 import { Hero } from "@/components/home/hero";
 import { Features } from "@/components/home/features";
@@ -9,6 +11,17 @@ import { SignupCtaSection } from "@/components/home/signup-cta-section";
 import { ContactSection } from "@/components/home/contact-section";
 import { Footer } from "@/components/layout/footer";
 import { BETA_MODE } from "@/lib/features";
+
+export const metadata: Metadata = {
+  title: `${siteConfig.name} — ${siteConfig.tagline}`,
+  description: siteConfig.description,
+  alternates: { canonical: siteConfig.url },
+  openGraph: {
+    url: siteConfig.url,
+    title: `${siteConfig.name} — ${siteConfig.tagline}`,
+    description: siteConfig.shortDescription,
+  },
+};
 
 export default function Home() {
   return (

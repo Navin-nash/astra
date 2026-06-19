@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — Astra",
-  description: "Terms governing your use of Astra.",
+  title: "Terms of Service",
+  description:
+    "Terms of Service for Astra — the GitHub-powered developer portfolio builder. Read the rules governing your use of the platform.",
+  robots: { index: true, follow: false },
 };
 
 const sections = [

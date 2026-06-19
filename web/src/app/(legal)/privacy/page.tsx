@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Astra",
-  description: "How Astra collects, uses, and protects your data.",
+  title: "Privacy Policy",
+  description:
+    "How Astra collects, uses, and protects your data. We use a read-only GitHub token scoped to repositories you select and never store raw source code.",
+  robots: { index: true, follow: false },
 };
 
 const sections = [
@@ -66,7 +68,7 @@ const sections = [
     content: (
       <>
         <p>
-          This is explicit because it matters. Astra's AST analysis reads the <em>shape</em> of
+          This is explicit because it matters. Astra&apos;s AST analysis reads the <em>shape</em> of
           your code — exported identifiers, import patterns, file structure — not the logic inside
           functions or the content of your commits. We never access or store:
         </p>
@@ -107,8 +109,8 @@ const sections = [
       <p>
         Astra uses Google Gemini to generate portfolio narratives. Curated repository summaries
         (structural signals and metadata, never raw source code) are sent as prompt inputs to
-        Gemini's API. Under our data processing agreement with Google, your data is not used
-        to train Gemini models. Processing occurs within Google's infrastructure under their
+        Gemini&apos;s API. Under our data processing agreement with Google, your data is not used
+        to train Gemini models. Processing occurs within Google&apos;s infrastructure under their
         enterprise data handling terms.
       </p>
     ),

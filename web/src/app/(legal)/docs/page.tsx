@@ -1,8 +1,21 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Docs — Astra",
-  description: "How Astra turns GitHub repositories into a developer portfolio in under 60 seconds.",
+  title: "Documentation",
+  description:
+    "Astra documentation — learn how to connect GitHub, select repositories, and get a live technical portfolio in under 60 seconds. Zero config required.",
+  keywords: [
+    "astra documentation",
+    "github portfolio setup",
+    "developer portfolio guide",
+    "astra getting started",
+  ],
+  openGraph: {
+    title: "Astra Documentation",
+    description:
+      "Learn how to connect GitHub and ship a technical portfolio in under 60 seconds.",
+    type: "article",
+  },
 };
 
 const navItems = [
