@@ -1,10 +1,12 @@
 'use client';
 
+import Link from 'next/link';
 import { motion, useReducedMotion } from 'motion/react';
-import { ArrowRight, ArrowDown } from '@phosphor-icons/react';
+import { ArrowRight } from '@phosphor-icons/react';
 import { WordRotate } from '@/components/ui/word-rotate';
 import { VideoText } from '@/components/ui/video-text';
 import { Button } from '@/components/ui/button';
+import { BETA_MODE } from '@/lib/features';
 
 const DEMO_VIDEO =
   'https://res.cloudinary.com/dtqadlaim/video/upload/v1781593121/hero_catr9o.mp4';
@@ -47,7 +49,7 @@ export function Hero() {
           className="absolute inset-0 opacity-85 dark:opacity-100 transition-opacity duration-500"
           style={{
             background: [
-              'radial-gradient(ellipse 110% 130% at 0% 100%,',
+              'radial-gradient(ellipse 110% 130% at 100% 0%,',
               'color-mix(in oklch, var(--brand) 95%, white) 0%,',
               'color-mix(in oklch, var(--brand) 72%, transparent) 22%,',
               'color-mix(in oklch, var(--brand) 38%, transparent) 44%,',
@@ -66,8 +68,8 @@ export function Hero() {
               'linear-gradient(90deg, color-mix(in oklch, var(--background) 94%, var(--foreground)) 1.5px, transparent 1.5px)',
             ].join(', '),
             backgroundSize: '38px 38px',
-            WebkitMaskImage: 'radial-gradient(ellipse 112% 132% at 0% 100%, black 0%, black 36%, transparent 80%)',
-            maskImage: 'radial-gradient(ellipse 112% 132% at 0% 100%, black 0%, black 36%, transparent 80%)',
+            WebkitMaskImage: 'radial-gradient(ellipse 112% 132% at 100% 0%, black 0%, black 36%, transparent 80%)',
+            maskImage: 'radial-gradient(ellipse 112% 132% at 100% 0%, black 0%, black 36%, transparent 80%)',
           }}
         />
 
@@ -76,31 +78,21 @@ export function Hero() {
           className="absolute inset-0 opacity-45 dark:opacity-100 transition-opacity duration-500"
           style={{
             background: [
-              'radial-gradient(ellipse 90% 92% at 0% 100%,',
+              'radial-gradient(ellipse 105% 108% at 100% 0%,',
               'transparent 30%,',
-              'var(--background) 70%)',
+              'var(--background) 72%)',
             ].join(' '),
           }}
         />
       </div>
 
-      {/* ── Upper content: eyebrow + headline + CTAs ── */}
+      {/* ── Upper content: headline + CTAs ── */}
       <motion.div
         variants={reduce ? undefined : container}
         initial={reduce ? false : 'hidden'}
         animate="show"
-        className="relative z-10 flex-1 flex flex-col px-6 pt-12 md:px-12 lg:px-20 md:pt-14"
+        className="relative z-10 flex-1 flex flex-col px-6 pt-36 md:px-12 lg:px-20 md:pt-32"
       >
-        {/* Eyebrow */}
-        <motion.div variants={reduce ? undefined : fadeUp} className="mb-8 md:mb-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-border text-muted-foreground text-[11px] uppercase tracking-[0.2em]">
-            <span
-              className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_6px_2px_rgba(74,222,128,0.5)]"
-              aria-hidden
-            />
-            Now in early access
-          </div>
-        </motion.div>
 
         {/* VideoText: video plays through both headline lines */}
         <motion.div variants={reduce ? undefined : fadeUp} className="w-full">
@@ -125,36 +117,36 @@ export function Hero() {
           variants={reduce ? undefined : fadeUp}
           className="flex items-center gap-3 flex-wrap mt-8 md:mt-10"
         >
-          <Button
-            size="lg"
-            className="gap-2 rounded-lg px-6 h-11"
-            onClick={() => { window.location.hash = 'waitlist'; }}
-          >
-            Get early access
-            <ArrowRight size={15} aria-hidden />
-          </Button>
-          <Button
-            size="lg"
-            variant="outline"
-            className="rounded-lg px-6 h-11"
-            onClick={() =>
-              document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' })
-            }
-          >
-            See demo
+          {BETA_MODE ? (
+            <Button size="lg" className="gap-2 rounded-lg px-6 h-11" asChild>
+              <Link href="/#waitlist">
+                Get early access
+                <ArrowRight size={15} aria-hidden />
+              </Link>
+            </Button>
+          ) : (
+            <Button size="lg" className="gap-2 rounded-lg px-6 h-11" asChild>
+              <Link href="/login">
+                Get started
+                <ArrowRight size={15} aria-hidden />
+              </Link>
+            </Button>
+          )}
+          <Button size="lg" variant="outline" className="rounded-lg px-6 h-11" asChild>
+            <Link href="/#demo">See demo</Link>
           </Button>
         </motion.div>
 
         {/* "Built for" rotating label */}
         <motion.div
           variants={reduce ? undefined : fadeUp}
-          className="flex items-center gap-2 text-sm text-muted-foreground mt-6"
+          className="flex items-center gap-2 text-sm text-zinc-900/65 dark:text-white/65 mt-6"
         >
           <span>Built for</span>
           <WordRotate
             words={ROLES}
             duration={2600}
-            className="text-foreground font-semibold text-sm"
+            className="text-zinc-900 dark:text-white font-semibold text-sm"
             motionProps={{
               initial: { opacity: 0, y: 6 },
               animate: { opacity: 1, y: 0 },
@@ -173,32 +165,21 @@ export function Hero() {
         className="relative z-10 px-6 pb-8 md:px-12 lg:px-20 flex items-end justify-between gap-6"
       >
         {/* Left: description */}
-        <p className="max-w-xs md:max-w-sm text-muted-foreground text-sm md:text-base leading-relaxed">
+        <p className="max-w-xs md:max-w-sm text-zinc-900/80 dark:text-white/75 text-sm md:text-base leading-relaxed">
           Connect GitHub once. Astra reads your codebase, surfaces your architecture,
           and ships a portfolio that shows how you actually build — live in under 60 seconds.
         </p>
 
-        {/* Center: scroll indicator */}
-        <div className="hidden lg:flex items-center gap-2 text-muted-foreground/50 text-sm absolute left-1/2 -translate-x-1/2 bottom-8 whitespace-nowrap">
-          <span>Scroll to Discover</span>
-          <motion.span
-            animate={{ y: [0, 4, 0] }}
-            transition={{ repeat: Infinity, duration: 1.8, ease: 'easeInOut' }}
-          >
-            <ArrowDown size={14} aria-hidden />
-          </motion.span>
-        </div>
-
         {/* Right: quick stats */}
-        <div className="hidden md:flex items-end gap-8 shrink-0">
+        <div className="flex items-end gap-5 md:gap-8 shrink-0">
           {[
             { value: '60s', label: 'To ship' },
             { value: '0', label: 'Config files' },
             { value: '5+', label: 'Repos at once' },
           ].map(({ value, label }) => (
             <div key={label} className="flex flex-col gap-0.5 text-right">
-              <span className="font-black text-foreground text-2xl leading-none">{value}</span>
-              <span className="text-muted-foreground text-xs">{label}</span>
+              <span className="font-black text-zinc-900 dark:text-white text-xl md:text-2xl leading-none">{value}</span>
+              <span className="text-zinc-900/55 dark:text-white/55 text-[10px] md:text-xs">{label}</span>
             </div>
           ))}
         </div>
