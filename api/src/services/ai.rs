@@ -1,11 +1,11 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use reqwest::{header, Client as HttpClient};
 
 use crate::{
     config::Config,
     error::{AppError, Result},
-    services::ast::AstMetadata,
+    services::{ast::AstMetadata, google_auth::GoogleTokenManager},
 };
 
 // ── Model fallback chains ──────────────────────────────────────────────────────
@@ -16,10 +16,10 @@ use crate::{
 //   Tier 2: OpenRouter — 1K RPD free tier         → tertiary
 //   Tier 3: Groq       — 30 RPM, 12K TPM, 1K RPD → last resort (TPM cap kills large prompts)
 
-/// Gemini chain — Flash Lite is sub-5s at 1000 RPM; Flash is the tier fallback.
+/// Gemini chain via Agent Platform — model names require the "google/" vendor prefix.
 const GEMINI_MODELS: &[&str] = &[
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash",
+    "google/gemini-2.5-flash-lite",
+    "google/gemini-2.5-flash",
 ];
 
 /// NVIDIA NIM chain — ordered fastest-first to minimise latency.
@@ -106,15 +106,20 @@ pub struct ContributionInput {
 
 // ── Provider context ───────────────────────────────────────────────────────────
 
+enum TokenSource {
+    Static(String),
+    Dynamic(Arc<GoogleTokenManager>),
+}
+
 struct Provider {
     client: HttpClient,
     base_url: String,
-    api_key: String,
+    token: TokenSource,
     name: &'static str,
 }
 
 impl Provider {
-    fn new(
+    fn static_key(
         name: &'static str,
         base_url: impl Into<String>,
         api_key: impl Into<String>,
@@ -124,7 +129,30 @@ impl Provider {
             .timeout(Duration::from_secs(timeout_secs))
             .build()
             .expect("failed to build HTTP client");
-        Self { client, base_url: base_url.into(), api_key: api_key.into(), name }
+        Self { client, base_url: base_url.into(), token: TokenSource::Static(api_key.into()), name }
+    }
+
+    fn dynamic(
+        name: &'static str,
+        base_url: impl Into<String>,
+        manager: Arc<GoogleTokenManager>,
+        timeout_secs: u64,
+    ) -> Self {
+        let client = HttpClient::builder()
+            .timeout(Duration::from_secs(timeout_secs))
+            .build()
+            .expect("failed to build HTTP client");
+        Self { client, base_url: base_url.into(), token: TokenSource::Dynamic(manager), name }
+    }
+
+    async fn resolve_token(&self) -> Result<String> {
+        match &self.token {
+            TokenSource::Static(key) => Ok(key.clone()),
+            TokenSource::Dynamic(mgr) => mgr
+                .get_access_token()
+                .await
+                .map_err(|e| AppError::Ai(format!("{}: ADC token error: {e}", self.name))),
+        }
     }
 
     async fn chat(
@@ -134,13 +162,14 @@ impl Provider {
         max_tokens: u32,
         temperature: f32,
     ) -> Result<String> {
+        let token = self.resolve_token().await?;
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
         let body = ChatRequest { model, messages, max_tokens, temperature };
 
         let resp = self
             .client
             .post(&url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.api_key))
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
             .header(header::CONTENT_TYPE, "application/json")
             .json(&body)
             .send()
@@ -179,15 +208,33 @@ pub struct AiService {
 
 impl AiService {
     pub fn new(config: &Config) -> Self {
+        let gemini = if config.has_google_adc() {
+            // ADC path: exchange refresh_token for access_token on each call.
+            let manager = Arc::new(GoogleTokenManager::new(
+                config.google_client_id.clone().unwrap(),
+                config.google_client_secret.clone().unwrap(),
+                config.google_refresh_token.clone().unwrap(),
+            ));
+            tracing::info!("Gemini: using ADC (OAuth2 refresh_token) for authentication");
+            Provider::dynamic("gemini", &config.google_base_url, manager, 30)
+        } else {
+            // API key path (AI Studio).
+            let key = config.google_api_key.clone().unwrap_or_default();
+            if key.is_empty() {
+                tracing::warn!("Gemini: no API key or ADC configured — Gemini tier will fail");
+            }
+            tracing::info!("Gemini: using static API key for authentication");
+            Provider::static_key("gemini", &config.google_base_url, key, 30)
+        };
+
         Self {
-            // Gemini Flash Lite: 1000 RPM, sub-5s for repo summaries; 30s is generous.
-            gemini: Provider::new("gemini", &config.google_base_url, &config.google_api_key, 30),
+            gemini,
             // NIM: 40 RPM, no daily cap; reduced to 90s (nemotron-550B is now last within tier).
-            nim: Provider::new("nvidia-nim", &config.nvidia_nim_base_url, &config.nvidia_nim_api_key, 90),
+            nim: Provider::static_key("nvidia-nim", &config.nvidia_nim_base_url, &config.nvidia_nim_api_key, 90),
             // OpenRouter free tier — variable latency; 90s covers slow queues.
-            openrouter: Provider::new("openrouter", &config.openrouter_base_url, &config.openrouter_api_key, 90),
+            openrouter: Provider::static_key("openrouter", &config.openrouter_base_url, &config.openrouter_api_key, 90),
             // Groq: fast but 12K TPM cap; 60s is plenty.
-            groq: Provider::new("groq", &config.groq_base_url, &config.groq_api_key, 60),
+            groq: Provider::static_key("groq", &config.groq_base_url, &config.groq_api_key, 60),
         }
     }
 
@@ -209,7 +256,7 @@ impl AiService {
             ChatMsg::system(REPO_SUMMARY_PROMPT),
             ChatMsg::user(prompt),
         ];
-        self.call_ai(&messages, 200, 0.35).await
+        self.call_ai(&messages, 400, 0.35).await
     }
 
     pub async fn assemble_portfolio_mdx(
@@ -225,7 +272,7 @@ impl AiService {
             ChatMsg::system(PORTFOLIO_SYSTEM_PROMPT),
             ChatMsg::user(prompt),
         ];
-        self.call_ai(&messages, 6000, 0.3).await
+        self.call_ai(&messages, 8000, 0.3).await
     }
 
     // ── Internal helpers ───────────────────────────────────────────────────────
@@ -361,21 +408,20 @@ impl AiService {
         let key_deps: Vec<&str> = ast.imports.iter().take(12).map(String::as_str).collect();
 
         format!(
-            r#"## Repository Metadata
-Name: {name}
+            r#"## Repository: {name}
 Description: {desc}
-Language: {lang} | Forks: {forks}
+Language: {lang} | Stars: — | Forks: {forks}
 Topics: {topics}
-Frameworks: {frameworks}
+Detected frameworks: {frameworks}
 Code signals: {signals}
-Files analyzed: {files} | Functions: {fns} | Classes: {classes} | Lines: {lines} | Complexity: {complexity}/100
-Key imports: {deps}
+Files analyzed: {files} | Functions: {fns} | Classes: {classes} | Lines of code: {lines} | Complexity: {complexity}/100
+Key imports (top 12): {deps}
 Exported symbols: {exports}
 
 {readme_section}
 {dep_section}
 
-Write a 2-3 sentence portfolio description (plain prose, no headers, no bullets, no emojis, 40-80 words total)."#,
+Write a 2-3 sentence portfolio description following the system prompt instructions."#,
             name = name,
             desc = description.unwrap_or("(none)"),
             lang = ast.language,
@@ -612,30 +658,41 @@ fn truncate_at_boundary(text: &str, max_chars: usize) -> &str {
 
 // ── Prompt constants ───────────────────────────────────────────────────────────
 
-const REPO_SUMMARY_PROMPT: &str = r#"You are writing concise project descriptions for a developer portfolio. Each description appears on a card — think of it as the blurb a developer would write under their project on their personal site.
+const REPO_SUMMARY_PROMPT: &str = r#"You are writing project descriptions for a developer portfolio. Each description appears on a project card where developers showcase their technical work.
 
 ## Output format
 
-2–3 sentences of plain prose. No headers, no bullets, no emojis, no bold. Total length: 40–80 words.
+4–6 sentences of plain prose. No headers, no bullets, no emojis, no bold. 150–280 words.
 
-## Sentence structure
+## What to write
 
-**Sentence 1 — What it is:** One sentence: what the project does and who it's for. Be direct. Lead with the concrete thing it builds or solves, not meta-commentary about it.
+**Sentence 1 — Problem and domain:** State the specific problem or user need this project addresses. Name the domain, the pain point, and the gap it fills. Be concrete — avoid abstract framing like "aims to" or "helps with".
 
-**Sentence 2 — How it works (key technical detail):** One specific technical choice that makes the implementation interesting — a protocol, data structure, algorithm, or architectural pattern. Only include what the data actually supports; skip this if nothing stands out.
+**Sentence 2 — Core technical architecture:** Describe the fundamental architectural pattern: how data flows, how components interact, or what execution model it uses (event-driven, client-server, pipeline, actor model). This should emerge from the actual imports, framework choices, and code structure.
 
-**Sentence 3 — Impact or scope (optional):** Stars, community adoption, production use, or a concrete outcome — only if meaningful.
+**Sentence 3 — Most interesting implementation detail:** Name the single most technically impressive or unusual choice visible in the code: a specific algorithm, data structure, protocol, concurrency pattern, caching strategy, or API design decision. Be specific — "uses a B-tree index for O(log n) range queries" beats "uses efficient data structures".
 
-## Tone
+**Sentence 4 — Technology stack and tooling:** Name the key libraries, frameworks, and services used. Be specific about why these choices matter — "uses sqlx with compile-time query verification" is better than "uses a database". Derive from the dependency file and imports.
 
-Write as if the developer is explaining their own project in one breath — direct, confident, specific. Not: "This project aims to..." Not: "A comprehensive solution for..." Just: what it does, in plain English.
+**Sentence 5 — Scale, scope, or outcome (include when data supports it):** Production usage, star count context, measurable performance characteristics, specific integrations, or open-source adoption. Only include if the data provides real signal — skip if not.
+
+**Sentence 6 — API surface or notable exported functionality (include when relevant):** If the project has a well-defined public interface, exported symbols, or a meaningful CLI/SDK, mention what it provides to consumers.
+
+## Extraction signals
+
+- **Frameworks and imports** → architecture and paradigm (FastAPI + SQLAlchemy = async REST + ORM; Axum + sqlx = zero-copy Rust HTTP; React + tRPC = end-to-end typed client-server)
+- **Exported symbols and function count** → API surface, module boundaries, and intended use
+- **Dependency file** → specific library choices worth naming (e.g. "uses BM25 ranking via rank-bm25", "real-time sync via Yjs CRDTs", "vector search via hnswlib")
+- **Complexity score and function count** → codebase depth, algorithmic density, and scope
+- **Topics and signals** → domain, deployment context, and project intent
+- **README** → concrete feature names, usage examples, benchmarks, and performance claims — extract specific claims, not summaries of summaries
 
 ## Constraints
 
-- Accuracy over completeness. If the data does not support a claim, omit it.
-- Do not mention the README or documentation as a feature.
+- Every technical claim must be grounded in the provided data. No invented features.
+- Do not mention the README, documentation, or "the code" as features.
 - No job titles, company names, or biographical information.
-- No buzzwords: no "leverages", "innovative", "powerful", "robust", "seamless", "cutting-edge"."#;
+- Prohibited words: "leverages", "innovative", "powerful", "robust", "seamless", "cutting-edge", "comprehensive", "solution", "platform" (unless it literally is one)."#;
 
 const PORTFOLIO_SYSTEM_PROMPT: &str = r#"You are writing the intro copy for a developer's personal portfolio site. Your output is rendered directly as MDX in a React application. Project cards are handled separately — do not write them.
 
@@ -648,23 +705,23 @@ const PORTFOLIO_SYSTEM_PROMPT: &str = r#"You are writing the intro copy for a de
 
 ## Tone
 
-Write the way a developer would write their own site — direct, human, confident. Not a recruiter description. Not an AI summary. Think: "what would the developer put in their GitHub bio if they had more than 160 characters?"
+Write the way a developer would write their own site — direct, human, confident. Not a recruiter description. Not an AI summary. Think: "what would the developer put in their GitHub bio if they had more than 160 characters and was writing for someone who reads code?"
 
 ## Required output (in this exact order)
 
 **1. Tagline paragraph** (NO heading before it)
-1–2 sentences. Distill their technical identity from what the code actually shows: what domains they build in, which stacks they reach for, what their work is actually about. Should read like someone describing themselves at a meetup.
+2–3 sentences. Distill their technical identity from what the code actually shows: what domains they consistently build in, which stacks and libraries they reach for across multiple repos, what types of problems they repeatedly solve, and what makes their portfolio distinctive. Should read like someone describing themselves at a technical meetup — specific enough that a developer reading it would immediately recognize the person's work.
 
 **2. ## About**
-2–3 sentences expanding on the tagline. Draw from language distribution, framework choices, project domains, and recurring patterns. Should feel like the "About" section on a thoughtful personal site — not a LinkedIn summary, not an architecture document.
+4–6 sentences expanding on the tagline. Draw from all available signals: language distribution and what it reveals about focus areas; specific framework and library choices that show technical preferences; recurring architectural patterns across projects; domains and problem spaces they keep returning to; notable scale, star counts, or open-source adoption; and anything technically unusual or impressive in the overall portfolio. Each sentence should add new information — don't repeat the tagline. Should feel like a thoughtful technical blog's "About" page, not a LinkedIn summary.
 
 **3. ## Open Source Contributions**
-Include ONLY if contribution data is present and non-empty. One framing sentence, then the list as provided.
+Include ONLY if contribution data is present and non-empty. One sentence describing the nature and areas of the contributions (what types of changes, which ecosystems), then the list as provided.
 
 Do NOT output: a `#` H1, `## Featured Projects`, project blocks, `## Experience`, `## Skills`, or any other section.
 
 ## MDX formatting
 
 - `##` — H2 for sections only
-- Inline code with backticks for package/library names
+- Inline code with backticks for package/library names and specific technical terms
 - Plain paragraphs for prose; lists only in the Contributions section"#;

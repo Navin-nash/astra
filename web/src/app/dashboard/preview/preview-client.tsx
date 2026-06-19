@@ -62,9 +62,11 @@ function replaceAboutInMdx(mdx: string, newAbout: string): string {
 // ── Edit callbacks interface ───────────────────────────────────────────────────
 
 export interface EditCallbacks {
-  onBioEdit: (currentBio: string) => void
-  onAboutEdit: (currentAbout: string) => void
-  onProjectEdit: (repoId: string, currentSummary: string) => void
+  onBioSave: (newBio: string) => void
+  onAboutSave: (newAbout: string) => void
+  onProjectSave: (repoId: string, newSummary: string) => void
+  onNameSave: (newName: string) => void
+  onContactSave: (newContact: string) => void
 }
 
 // ── Template renderer ─────────────────────────────────────────────────────────
@@ -80,17 +82,11 @@ function RenderTemplate({
 }) {
   switch (data.theme_config.template) {
     case "minimal":
-      return <MinimalTemplate data={data} />
+      return <MinimalTemplate data={data} editMode={editMode} editCallbacks={editCallbacks} />
     case "terminal":
-      return <TerminalTemplate data={data} />
+      return <TerminalTemplate data={data} editMode={editMode} editCallbacks={editCallbacks} />
     default:
-      return (
-        <VoidTemplate
-          data={data}
-          editMode={editMode}
-          editCallbacks={editCallbacks}
-        />
-      )
+      return <VoidTemplate data={data} editMode={editMode} editCallbacks={editCallbacks} />
   }
 }
 
@@ -114,18 +110,17 @@ export function PreviewClient({ initialData, isPublished }: PreviewClientProps) 
 
   const [mdxContent, setMdxContent] = useState(initialData.mdx_content)
   const [template, setTemplate] = useState<TemplateId>(initialData.theme_config.template)
+  const [displayName, setDisplayName] = useState(
+    initialData.theme_config.display_name ?? initialData.username
+  )
+  const [contactUrl, setContactUrl] = useState(
+    initialData.theme_config.contact_url ?? ""
+  )
   const [projectEdits, setProjectEdits] = useState<Record<string, string>>(
     () => parseProjectOverrides(initialData.mdx_content)
   )
   const [published, setPublished] = useState(isPublished)
   const [editMode, setEditMode] = useState(false)
-
-  // Edit modal
-  const [editModal, setEditModal] = useState<{
-    label: string
-    onSave: (v: string) => void
-  } | null>(null)
-  const [editDraft, setEditDraft] = useState("")
 
   const [isSaving, startSave] = useTransition()
   const [isPublishing, startPublish] = useTransition()
@@ -135,7 +130,7 @@ export function PreviewClient({ initialData, isPublished }: PreviewClientProps) 
   const data: PortfolioData = {
     ...initialData,
     mdx_content: mdxContent,
-    theme_config: { ...initialData.theme_config, template },
+    theme_config: { ...initialData.theme_config, template, display_name: displayName, contact_url: contactUrl },
     repositories: initialData.repositories.map((repo) => ({
       ...repo,
       ai_summary: projectEdits[repo.id] ?? repo.ai_summary,
@@ -145,35 +140,25 @@ export function PreviewClient({ initialData, isPublished }: PreviewClientProps) 
   const hasChanges =
     mdxContent !== initialData.mdx_content ||
     template !== initialData.theme_config.template ||
-    Object.keys(projectEdits).length > 0
+    displayName !== (initialData.theme_config.display_name ?? initialData.username) ||
+    Object.keys(projectEdits).length > 0 ||
+    contactUrl !== (initialData.theme_config.contact_url ?? "")
 
-  // Open the edit modal
-  const openEdit = (label: string, value: string, onSave: (v: string) => void) => {
-    setEditDraft(value)
-    setEditModal({ label, onSave })
-  }
-
-  // Typed callbacks passed to the template
+  // Inline edit callbacks — templates manage their own edit UI, just save here
   const editCallbacks: EditCallbacks = {
-    onBioEdit: (currentBio) =>
-      openEdit("Introduction", currentBio, (v) =>
-        setMdxContent((prev) => replaceBioInMdx(prev, v))
-      ),
-    onAboutEdit: (currentAbout) =>
-      openEdit("About", currentAbout, (v) =>
-        setMdxContent((prev) => replaceAboutInMdx(prev, v))
-      ),
-    onProjectEdit: (repoId, currentSummary) =>
-      openEdit("Project description", currentSummary, (v) =>
-        setProjectEdits((prev) => ({ ...prev, [repoId]: v }))
-      ),
+    onBioSave: (newBio) => setMdxContent((prev) => replaceBioInMdx(prev, newBio)),
+    onAboutSave: (newAbout) => setMdxContent((prev) => replaceAboutInMdx(prev, newAbout)),
+    onProjectSave: (repoId, newSummary) =>
+      setProjectEdits((prev) => ({ ...prev, [repoId]: newSummary })),
+    onNameSave: (newName) => setDisplayName(newName.trim() || initialData.username),
+    onContactSave: (newContact) => setContactUrl(newContact.trim()),
   }
 
   const handleSave = () => {
     startSave(async () => {
       try {
         const finalMdx = serializeProjectOverrides(mdxContent, projectEdits)
-        await savePortfolioChanges(finalMdx, { template })
+        await savePortfolioChanges(finalMdx, { template, display_name: displayName, contact_url: contactUrl })
         setSaveMessage("Saved")
         setTimeout(() => setSaveMessage(null), 2000)
       } catch {
@@ -272,8 +257,8 @@ export function PreviewClient({ initialData, isPublished }: PreviewClientProps) 
       >
         <div className="h-10 flex items-center justify-between px-4 border-b border-brand/15">
           {/* Template chips */}
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] uppercase tracking-widest text-brand/60 font-semibold mr-2">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] uppercase tracking-widest text-brand/60 font-semibold">
               Template
             </span>
             <div className="flex items-center gap-0.5 rounded-full border border-brand/20 bg-background/60 p-0.5">
@@ -294,7 +279,7 @@ export function PreviewClient({ initialData, isPublished }: PreviewClientProps) 
           </div>
           {/* Hint */}
           <p className="text-[11px] text-brand/70 hidden sm:block">
-            Click any section on the portfolio to edit it
+            Click any section on the portfolio to edit it inline
           </p>
         </div>
       </div>
@@ -307,58 +292,6 @@ export function PreviewClient({ initialData, isPublished }: PreviewClientProps) 
           editCallbacks={editCallbacks}
         />
       </div>
-
-      {/* ── Edit modal ────────────────────────────────────────────────────────── */}
-      {editModal && (
-        <div
-          className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,0.6)" }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setEditModal(null)
-          }}
-        >
-          <div className="w-full max-w-lg rounded-2xl bg-background border border-border p-5 space-y-3 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-foreground">
-                {editModal.label}
-              </h3>
-              <button
-                onClick={() => setEditModal(null)}
-                className="text-muted-foreground hover:text-foreground transition-colors text-xl leading-none"
-              >
-                ×
-              </button>
-            </div>
-            <textarea
-              autoFocus
-              value={editDraft}
-              onChange={(e) => setEditDraft(e.target.value)}
-              rows={8}
-              className="w-full rounded-lg border border-border bg-muted/40 p-3 text-sm text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-ring font-sans"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Plain text — formatting is preserved from your original generation.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setEditModal(null)}
-                className="rounded-full border border-border px-4 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  editModal.onSave(editDraft)
-                  setEditModal(null)
-                }}
-                className="rounded-full bg-foreground text-background px-4 py-1.5 text-xs font-medium hover:bg-foreground/90 transition-colors"
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

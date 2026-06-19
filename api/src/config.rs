@@ -3,7 +3,8 @@ use anyhow::{Context, Result};
 const OPENROUTER_BASE_URL: &str = "https://openrouter.ai/api/v1";
 const GROQ_BASE_URL: &str = "https://api.groq.com/openai/v1";
 const NVIDIA_NIM_BASE_URL: &str = "https://integrate.api.nvidia.com/v1";
-const GOOGLE_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta/openai";
+/// Fallback endpoint used when ADC is not configured (Gemini API / AI Studio).
+const GOOGLE_AI_STUDIO_URL: &str = "https://generativelanguage.googleapis.com/v1beta/openai";
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -22,9 +23,18 @@ pub struct Config {
     /// Last-resort AI provider — OpenRouter free tier (1K RPD — preserve daily budget)
     pub openrouter_api_key: String,
     pub openrouter_base_url: String,
-    /// Primary AI provider — Gemini 2.5 Flash Lite (1000 RPM, API-key auth)
-    pub google_api_key: String,
+    /// Gemini API key (AI Studio). Used only when ADC credentials are absent.
+    pub google_api_key: Option<String>,
+    /// Resolved OpenAI-compatible base URL for Gemini.
+    /// Auto-set to the Agent Platform (aiplatform.googleapis.com) URL when ADC is configured;
+    /// falls back to the AI Studio endpoint otherwise.
     pub google_base_url: String,
+    /// Google ADC credentials (authorized_user type — from `gcloud auth application-default login`).
+    /// When all three are present, the AI service exchanges the refresh_token for a Bearer
+    /// access token and routes requests through the Agent Platform endpoint.
+    pub google_client_id: Option<String>,
+    pub google_client_secret: Option<String>,
+    pub google_refresh_token: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -42,6 +52,38 @@ impl Config {
             "production" => Environment::Production,
             _ => Environment::Development,
         };
+
+        let google_client_id = std::env::var("GOOGLE_CLIENT_ID").ok();
+        let google_client_secret = std::env::var("GOOGLE_CLIENT_SECRET").ok();
+        let google_refresh_token = std::env::var("GOOGLE_REFRESH_TOKEN").ok();
+        let has_adc = google_client_id.is_some()
+            && google_client_secret.is_some()
+            && google_refresh_token.is_some();
+
+        // Resolve Gemini base URL. Priority order:
+        //   1. Explicit GOOGLE_BASE_URL env var (always wins)
+        //   2. Agent Platform URL constructed from GOOGLE_CLOUD_PROJECT / GOOGLE_CLOUD_LOCATION /
+        //      API_ENDPOINT when ADC credentials are present (migrated path)
+        //   3. AI Studio endpoint fallback (legacy API-key path)
+        let google_base_url = std::env::var("GOOGLE_BASE_URL").unwrap_or_else(|_| {
+            if has_adc {
+                let project = std::env::var("GOOGLE_CLOUD_PROJECT").unwrap_or_default();
+                let location = std::env::var("GOOGLE_CLOUD_LOCATION")
+                    .unwrap_or_else(|_| "global".into())
+                    .trim_matches('"')
+                    .to_owned();
+                let api_endpoint = std::env::var("API_ENDPOINT")
+                    .unwrap_or_else(|_| "https://aiplatform.googleapis.com".into())
+                    .trim_matches('"')
+                    .to_owned();
+                format!(
+                    "{}/v1/projects/{}/locations/{}/endpoints/openapi",
+                    api_endpoint, project, location
+                )
+            } else {
+                GOOGLE_AI_STUDIO_URL.into()
+            }
+        });
 
         Ok(Self {
             port: std::env::var("PORT")
@@ -66,11 +108,19 @@ impl Config {
                 .context("OPENROUTER_API_KEY must be set (OpenRouter fallback AI provider)")?,
             openrouter_base_url: std::env::var("OPENAI_BASE_URL")
                 .unwrap_or_else(|_| OPENROUTER_BASE_URL.into()),
-            google_api_key: std::env::var("GOOGLE_API_KEY")
-                .context("GOOGLE_API_KEY must be set (Gemini primary AI provider)")?,
-            google_base_url: std::env::var("GOOGLE_BASE_URL")
-                .unwrap_or_else(|_| GOOGLE_BASE_URL.into()),
+            google_api_key: std::env::var("GOOGLE_API_KEY").ok(),
+            google_base_url,
+            google_client_id,
+            google_client_secret,
+            google_refresh_token,
         })
+    }
+
+    /// Returns true if OAuth2 ADC credentials are fully configured.
+    pub fn has_google_adc(&self) -> bool {
+        self.google_client_id.is_some()
+            && self.google_client_secret.is_some()
+            && self.google_refresh_token.is_some()
     }
 
     pub fn is_production(&self) -> bool {
@@ -84,10 +134,8 @@ mod tests {
 
     #[test]
     fn config_fails_without_required_env() {
-        // from_env() must fail when the environment is incomplete (as in CI without .env).
-        // We only assert on the error type, not the exact missing key, because the first
-        // missing key (DATABASE_URL, GOOGLE_API_KEY, etc.) depends on load order.
-        if std::env::var("DATABASE_URL").is_err() || std::env::var("GOOGLE_API_KEY").is_err() {
+        // from_env() must fail when DATABASE_URL or other required keys are absent.
+        if std::env::var("DATABASE_URL").is_err() {
             assert!(
                 Config::from_env().is_err(),
                 "Config::from_env() must fail when required env vars are absent"

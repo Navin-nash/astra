@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { getPublicPortfolio } from "@/lib/rust-api"
 import { PortfolioTemplate } from "@/components/portfolio/template-selector"
+import { siteConfig } from "@/lib/site"
 import type { PortfolioData } from "@/types/portfolio"
 
 interface Props {
@@ -13,23 +14,54 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const portfolio = await getPublicPortfolio(username)
 
   if (!portfolio) {
-    return { title: "Portfolio not found" }
+    return {
+      title: "Portfolio not found",
+      robots: { index: false, follow: false },
+    }
   }
 
+  const repoCount = portfolio.repositories?.length ?? 0
+  const title = `${username} — Developer Portfolio`
+  const description = `${username}'s technical portfolio — ${repoCount} featured project${repoCount !== 1 ? "s" : ""}, built with Astra. See architecture decisions, tech stack, and engineering depth.`
+  const canonicalUrl = `${siteConfig.url}/${username}`
+  const ogImage = portfolio.avatar_url ?? siteConfig.ogImage
+
   return {
-    title: `${username} — Portfolio`,
-    description: `${username}'s technical portfolio built with Astra`,
+    title,
+    description,
+    alternates: { canonical: canonicalUrl },
     openGraph: {
-      title: `${username} — Portfolio`,
-      description: `${username}'s technical portfolio — ${portfolio.repositories?.length ?? 0} featured projects`,
-      images: portfolio.avatar_url ? [portfolio.avatar_url] : [],
       type: "profile",
+      url: canonicalUrl,
+      siteName: siteConfig.name,
+      title,
+      description,
+      images: [
+        {
+          url: ogImage,
+          secureUrl: ogImage,
+          width: 400,
+          height: 400,
+          alt: `${username}'s developer portfolio — powered by Astra`,
+          type: "image/png",
+        },
+      ],
     },
+    // Twitter/X, Slack, Discord, WhatsApp, Facebook all read these
     twitter: {
       card: "summary",
-      title: `${username} — Portfolio`,
-      images: portfolio.avatar_url ? [portfolio.avatar_url] : [],
+      site: "@useastra",
+      creator: "@useastra",
+      title,
+      description,
+      images: [
+        {
+          url: ogImage,
+          alt: `${username}'s developer portfolio — powered by Astra`,
+        },
+      ],
     },
+    robots: { index: true, follow: true },
   }
 }
 
@@ -46,9 +78,12 @@ export default async function PortfolioPage({ params }: Props) {
     theme_config: {
       template: (raw.theme_config?.template as PortfolioData["theme_config"]["template"]) ?? "void",
       accent: raw.theme_config?.accent as string | undefined,
+      display_name: raw.theme_config?.display_name as string | undefined,
+      contact_url: raw.theme_config?.contact_url as string | undefined,
     },
     last_synced_at: raw.last_synced_at ?? null,
     repositories: (raw.repositories ?? []) as PortfolioData["repositories"],
+    github_profile: raw.github_profile ?? undefined,
   }
 
   return <PortfolioTemplate data={data} />

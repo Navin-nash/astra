@@ -13,17 +13,18 @@ const portfolioExamples = [
     children: (
       <div className="space-y-4 text-sm text-muted-foreground leading-relaxed">
         <p>
-          Astra detected a full-stack Next.js application using App Router,
-          server components, and a Prisma-managed PostgreSQL database. The AI
-          narrative explains the architecture, the data model decisions, and the
-          deployment setup on Vercel.
+          Astra detected a full-stack Next.js application using App Router, React Server Components,
+          and a Prisma-managed PostgreSQL database. The AI narrative explains the architecture behind
+          the auth flow, the data model decisions driving the schema, and the trade-off between edge
+          rendering and database-heavy queries. It reads like a design doc — not a feature list.
         </p>
         <ul className="space-y-2 list-none">
           {[
-            "3 production applications analyzed",
-            "React, Next.js, Node.js ecosystem",
-            "Prisma + PostgreSQL data layer",
-            "GitHub Actions CI/CD pipeline",
+            "3 production applications analyzed in 47 seconds",
+            "App Router, RSC, and streaming patterns detected",
+            "Prisma schema → data model narrative generated",
+            "GitHub Actions CI/CD pipeline documented",
+            "Environment isolation and deployment strategy inferred",
           ].map((item) => (
             <li key={item} className="flex items-start gap-2">
               <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-brand shrink-0" aria-hidden />
@@ -41,17 +42,19 @@ const portfolioExamples = [
     children: (
       <div className="space-y-4 text-sm text-muted-foreground leading-relaxed">
         <p>
-          Astra parsed training pipelines, model architectures, and evaluation
-          scripts. The narrative explains model design decisions, dataset
-          management patterns, and reproducibility practices — turning
-          research code into a readable technical story.
+          Astra parsed training pipelines, custom model architectures, and evaluation harnesses
+          across five repositories. The narrative explains dataset management strategies, model
+          design decisions and their experimental rationale, and reproducibility practices.
+          It turns research code into a coherent technical story — the kind hiring managers
+          at AI labs actually want to read.
         </p>
         <ul className="space-y-2 list-none">
           {[
-            "5 ML project repositories",
-            "PyTorch, HuggingFace, scikit-learn",
-            "Custom training pipelines",
-            "Model evaluation and benchmarking",
+            "5 ML repositories, 3 different model families",
+            "PyTorch, HuggingFace Transformers, scikit-learn",
+            "Custom training loops and loss functions surfaced",
+            "Evaluation metrics and benchmarking strategies documented",
+            "Experiment tracking and reproducibility patterns noted",
           ].map((item) => (
             <li key={item} className="flex items-start gap-2">
               <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-brand shrink-0" aria-hidden />
@@ -69,17 +72,19 @@ const portfolioExamples = [
     children: (
       <div className="space-y-4 text-sm text-muted-foreground leading-relaxed">
         <p>
-          Astra identified memory-safe patterns in Rust and concurrent service
-          architecture in Go. The portfolio highlights low-level expertise,
-          performance optimizations, and systems-level thinking that a standard
-          resume rarely conveys.
+          Astra identified memory-safety patterns in Rust ownership models and concurrent service
+          architecture in Go. The portfolio highlights low-level expertise, async runtime design,
+          and performance optimization decisions that a standard resume rarely conveys. If you
+          wrote a zero-copy parser or a lock-free queue, Astra will find it and explain why it
+          matters.
         </p>
         <ul className="space-y-2 list-none">
           {[
-            "CLI tools and async runtimes",
-            "Rust ownership patterns analyzed",
-            "Go concurrent service design",
-            "Performance benchmarks documented",
+            "CLI tools, async runtimes, and systems daemons",
+            "Rust ownership and lifetime patterns analyzed",
+            "Go goroutine concurrency and channel patterns",
+            "SIMD optimizations and unsafe blocks documented",
+            "Performance benchmarks and flamegraph context inferred",
           ].map((item) => (
             <li key={item} className="flex items-start gap-2">
               <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-brand shrink-0" aria-hidden />
@@ -107,6 +112,10 @@ export function PortfolioGallery() {
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           className="mb-12"
         >
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-border text-muted-foreground text-[11px] uppercase tracking-[0.18em] mb-5">
+            <span className="w-1.5 h-1.5 rounded-full bg-brand" aria-hidden />
+            Portfolio examples
+          </div>
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground leading-tight" style={{ textWrap: "balance" }}>
             What Astra builds{" "}
             <DiaTextReveal
@@ -117,9 +126,10 @@ export function PortfolioGallery() {
               className="font-normal"
             />
           </h2>
-          <p className="mt-4 text-muted-foreground max-w-[44ch] leading-relaxed">
-            Click any card to see how Astra shapes your code into a technical
-            narrative. Every portfolio is unique to the engineer.
+          <p className="mt-4 text-muted-foreground max-w-[52ch] leading-relaxed">
+            Click any card to see how Astra translates code into a technical narrative. Every
+            portfolio is unique to the engineer — shaped by your actual architecture, not a
+            template you filled in.
           </p>
         </motion.div>
 
@@ -131,7 +141,7 @@ export function PortfolioGallery() {
               initial={reduce ? false : { opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.2 }}
-              transition={{ duration: 0.6, delay: i * 0.08, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: 0.6, delay: i * 0.06, ease: [0.16, 1, 0.3, 1] }}
             >
               <ExpandableCard
                 title={example.title}
@@ -145,6 +155,17 @@ export function PortfolioGallery() {
             </motion.div>
           ))}
         </div>
+
+        {/* Bottom note */}
+        <motion.p
+          initial={reduce ? false : { opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className="mt-10 text-center text-sm text-muted-foreground/60"
+        >
+          Every portfolio is generated fresh from your code — never from a shared template.
+        </motion.p>
       </div>
     </section>
   );

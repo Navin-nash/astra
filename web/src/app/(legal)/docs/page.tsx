@@ -1,14 +1,51 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Docs — Astra",
-  description: "How Astra turns GitHub repositories into a developer portfolio in under 90 seconds.",
+  title: "Documentation",
+  description:
+    "Astra documentation — learn how to connect GitHub, select repositories, and get a live technical portfolio in under 60 seconds. Zero config required.",
+  keywords: [
+    "astra documentation",
+    "github portfolio setup",
+    "developer portfolio guide",
+    "astra getting started",
+  ],
+  openGraph: {
+    type: "article",
+    title: "Astra Documentation",
+    description:
+      "Learn how to connect GitHub and ship a technical portfolio in under 60 seconds.",
+    images: [
+      {
+        url: "https://useastra.tech/og.png",
+        secureUrl: "https://useastra.tech/og.png",
+        width: 1200,
+        height: 630,
+        alt: "Astra Documentation — GitHub portfolio in under 60 seconds",
+        type: "image/png",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    site: "@useastra",
+    title: "Astra Documentation",
+    description:
+      "Learn how to connect GitHub and ship a technical portfolio in under 60 seconds.",
+    images: [
+      {
+        url: "https://useastra.tech/og.png",
+        alt: "Astra Documentation — GitHub portfolio in under 60 seconds",
+      },
+    ],
+  },
 };
 
 const navItems = [
   { id: "quickstart", label: "Quickstart" },
   { id: "how-it-works", label: "How it works" },
   { id: "what-astra-reads", label: "What Astra reads" },
+  { id: "auto-sync", label: "Auto-sync" },
   { id: "templates", label: "Portfolio templates" },
   { id: "faq", label: "FAQ" },
 ];
@@ -29,7 +66,7 @@ export default function DocsPage() {
             How Astra works
           </h1>
           <p className="text-muted-foreground text-base md:text-lg max-w-[52ch] leading-relaxed">
-            Everything you need to get your GitHub repositories live as a portfolio in under 90 seconds.
+            Everything you need to get your GitHub repositories live as a portfolio in under 60 seconds.
           </p>
         </div>
       </div>
@@ -55,7 +92,7 @@ export default function DocsPage() {
               ))}
               <div className="pt-6 mt-4 border-t border-border">
                 <a
-                  href="mailto:support@useastra.qzz.io"
+                  href="mailto:support@useastra.tech"
                   className="text-xs text-brand hover:underline font-medium"
                 >
                   Something missing? Email us
@@ -69,7 +106,7 @@ export default function DocsPage() {
 
             <DocSection id="quickstart" title="Quickstart">
               <p>
-                Getting from zero to a live portfolio takes four steps and about 90 seconds.
+                Getting from zero to a live portfolio takes four steps and under 60 seconds.
               </p>
               <div className="space-y-4 mt-4">
                 {[
@@ -77,19 +114,19 @@ export default function DocsPage() {
                     step: "01",
                     heading: "Sign in with GitHub",
                     detail:
-                      "Astra requests read-only access to your public repository metadata. No write permissions, no access to private repositories.",
+                      "Astra requests a read-only OAuth token scoped to your public repository metadata. No write access is requested. Private repositories are never accessed unless you explicitly extend the permission scope.",
                   },
                   {
                     step: "02",
                     heading: "Select up to 5 repositories",
                     detail:
-                      "Choose the projects you want to feature. Astra will analyze language breakdown, commit activity, topics, and project descriptions.",
+                      "Choose the projects you want to feature. Astra runs parallel AST analysis on all selected repositories — language detection, exported symbols, dependency graphs, framework patterns, and commit statistics.",
                   },
                   {
                     step: "03",
                     heading: "Generate",
                     detail:
-                      "Hit Generate. Within ~90 seconds, Astra produces written narratives for each project, a short bio, and assembles your portfolio.",
+                      "Hit Generate. Within 60 seconds, Astra produces technical narratives for each project, identifies your engineering patterns, and assembles a complete portfolio. You can edit any generated text before publishing.",
                   },
                   {
                     step: "04",
@@ -98,9 +135,9 @@ export default function DocsPage() {
                       <>
                         Your portfolio is live at{" "}
                         <code className="text-foreground bg-muted px-1.5 py-0.5 rounded text-sm font-mono">
-                          astra.build/u/your-username
+                          useastra.tech/u/your-username
                         </code>
-                        . Share it anywhere.
+                        . Share it in applications, your bio, or anywhere you want your work seen.
                       </>
                     ),
                   },
@@ -120,49 +157,103 @@ export default function DocsPage() {
 
             <DocSection id="how-it-works" title="How it works">
               <p>
-                Astra is built on a Rust processing engine that fetches repository data from the GitHub API, runs static analysis to extract language statistics and structural signals, then passes curated summaries to a cascade of AI models.
+                Astra is built on a Rust processing engine that connects to the GitHub API, fetches your selected repository data, and runs AST-level static analysis — not a surface-level README skim. It identifies exported symbols, framework usage patterns, dependency graphs, and architectural signals directly from the code structure.
               </p>
               <p>
-                The AI layer uses a tiered approach: fast models produce initial narrative drafts; a quality pass refines the output. This keeps generation fast without sacrificing quality. We use Google Gemini Flash, Groq, and NVIDIA NIM as inference providers.
+                The analysis output is passed to an AI reasoning layer calibrated for engineering audiences. Rather than generating generic marketing copy, the AI produces technical narratives that explain architecture, design trade-offs, and implementation depth — the kind of context a hiring engineer or technical founder needs to evaluate your work.
               </p>
               <p>
-                Generated portfolios are server-rendered for instant load times and are publicly accessible without requiring visitors to sign in.
+                All repository analysis runs in parallel. Five repositories take roughly the same time as one. Generated portfolios are server-rendered for fast load times and are publicly accessible without requiring visitors to log in.
               </p>
+              <div className="mt-5 p-4 rounded-lg bg-muted/60 border border-border">
+                <p className="text-sm text-foreground font-semibold mb-1">AI providers</p>
+                <p className="text-sm text-muted-foreground">
+                  Astra uses Google Gemini as the primary inference provider. Repository summaries are sent as prompt inputs. Under our agreement, Gemini does not use your data to train its models.
+                </p>
+              </div>
             </DocSection>
 
             <DocSection id="what-astra-reads" title="What Astra reads">
-              <p>Astra reads the following from your selected repositories:</p>
+              <p>
+                Astra performs AST-level analysis on your selected repositories. Here is exactly what is accessed and how it is used:
+              </p>
               <ul>
                 {[
-                  "Repository name, description, and topics",
-                  "Primary language and language breakdown by byte count",
-                  "Star and fork counts",
-                  "Recent commit activity (count and frequency, not commit messages)",
-                  "README presence (not content)",
+                  "Repository name, description, and GitHub topics",
+                  "Primary language and full language breakdown by byte count",
+                  "Exported symbols, components, hooks, handlers, and classes (structure only — not logic)",
+                  "Dependency manifest (package.json, Cargo.toml, requirements.txt, go.mod, etc.) — packages and versions",
+                  "Framework and library detection inferred from import patterns",
+                  "Commit count and activity frequency (not commit messages or diffs)",
                   "Open-source licence type",
+                  "Star and fork counts",
                 ].map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>
               <div className="mt-5 p-4 rounded-lg bg-muted/60 border border-border">
-                <p className="text-sm text-foreground font-semibold mb-1">What we never read</p>
+                <p className="text-sm text-foreground font-semibold mb-1">What Astra never reads or stores</p>
                 <p className="text-sm text-muted-foreground">
-                  Astra does not read your source code, commit messages, issues, pull requests, or any private repository data.
+                  Astra does not read or store raw source code, commit messages, commit diffs, pull requests, issues, code review comments, or any private repository data. AST analysis extracts structural signals only — the shape of your code, not the content.
                 </p>
               </div>
             </DocSection>
 
+            <DocSection id="auto-sync" title="Auto-sync">
+              <p>
+                Once your portfolio is published, Astra watches your connected repositories via GitHub webhooks. When you push new code, Astra automatically re-analyzes the affected repositories and updates your portfolio within approximately two minutes.
+              </p>
+              <p>
+                Auto-sync is enabled by default for all connected repositories. You can disable it per-repository from your dashboard settings if you prefer to control when updates go live.
+              </p>
+              <div className="space-y-4 mt-4">
+                {[
+                  {
+                    step: "01",
+                    heading: "You push to a connected repository",
+                    detail: "GitHub sends a webhook event to Astra within seconds of the push.",
+                  },
+                  {
+                    step: "02",
+                    heading: "Astra re-analyzes the repository",
+                    detail: "The delta is analyzed using the same AST pipeline as the initial generation.",
+                  },
+                  {
+                    step: "03",
+                    heading: "Portfolio updates automatically",
+                    detail: "The updated narrative and project data are published to your live portfolio within ~2 minutes. No action required.",
+                  },
+                ].map(({ step, heading, detail }) => (
+                  <div key={step} className="flex gap-5">
+                    <span className="text-xs font-mono text-brand font-bold mt-0.5 w-6 shrink-0">
+                      {step}
+                    </span>
+                    <div>
+                      <p className="font-semibold text-foreground mb-1">{heading}</p>
+                      <p className="text-muted-foreground text-sm leading-relaxed">{detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </DocSection>
+
             <DocSection id="templates" title="Portfolio templates">
-              <p>Astra ships two portfolio templates:</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <p>
+                Astra ships three portfolio templates. Template selection is available from your dashboard after generation.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
                 {[
                   {
                     name: "Minimal",
-                    desc: "Clean, light-themed layout focused on readability. Presents a focused project list with clear technical depth.",
+                    desc: "Clean layout with a light default. Focused on readability and presenting technical depth without visual noise.",
+                  },
+                  {
+                    name: "Terminal",
+                    desc: "Monospaced, command-line aesthetic. Built for engineers who want their portfolio to feel like an interface.",
                   },
                   {
                     name: "Void",
-                    desc: "Dark, high-contrast design with a code-editor aesthetic. Built for engineers who want something that reads as technical.",
+                    desc: "Dark, high-contrast design with a code-editor feel. Built for engineers who want something that reads as technical and serious.",
                   },
                 ].map(({ name, desc }) => (
                   <div key={name} className="p-5 rounded-xl border border-border bg-card">
@@ -175,7 +266,7 @@ export default function DocsPage() {
                 ))}
               </div>
               <p className="mt-4">
-                More templates are in development. Template selection is available after generation from your dashboard.
+                All templates support dark and light display modes and are optimised for both desktop and mobile viewing. Additional templates are in development.
               </p>
             </DocSection>
 
@@ -184,27 +275,31 @@ export default function DocsPage() {
                 {[
                   {
                     q: "Is Astra free?",
-                    a: "During early access, Astra is free to use. Pricing will be announced before the public launch.",
+                    a: "Astra is free during early access. Pricing will be announced before the public launch. Waitlist members lock in their rate at signup.",
                   },
                   {
                     q: "Can I edit the generated portfolio?",
-                    a: "Yes. After generation, you can edit any text in the dashboard before publishing.",
+                    a: "Yes, fully. Every generated sentence is editable inline before and after publishing. You can rewrite a section, cut a paragraph, or publish the first draft exactly as-is.",
                   },
                   {
                     q: "Does Astra support private repositories?",
-                    a: "Not currently. Astra is designed for showcasing public work. Private repo support may come in a future update.",
+                    a: "Not by default. The default OAuth scope is read-only on public repositories. Private repo access is not currently offered.",
                   },
                   {
-                    q: "How is my portfolio URL set?",
-                    a: "Your portfolio is served at astra.build/u/your-github-username by default.",
-                  },
-                  {
-                    q: "Can I use a custom domain?",
-                    a: "Custom domain support is planned after the early access period.",
+                    q: "How is my portfolio URL structured?",
+                    a: "Your portfolio is served at useastra.tech/u/your-github-username. The username is set automatically from your GitHub account.",
                   },
                   {
                     q: "How often does my portfolio update?",
-                    a: "Portfolios are generated on demand. Re-run generation from your dashboard to refresh the content from your latest repository state.",
+                    a: "Automatically — within ~2 minutes of any push to a connected repository via GitHub webhooks. You can also manually trigger a regeneration from your dashboard.",
+                  },
+                  {
+                    q: "Which languages does Astra support?",
+                    a: "Astra parses 20+ languages including TypeScript, JavaScript, Python, Rust, Go, Java, Ruby, Swift, and Kotlin, with framework detection for Next.js, FastAPI, Django, Gin, Axum, Rails, Spring Boot, and more.",
+                  },
+                  {
+                    q: "How long does generation take?",
+                    a: "Under 60 seconds for up to five repositories. All repos are analyzed in parallel, and narrative generation runs concurrently per project.",
                   },
                 ].map(({ q, a }) => (
                   <div key={q} className="pb-8 border-b border-border last:border-0 last:pb-0">

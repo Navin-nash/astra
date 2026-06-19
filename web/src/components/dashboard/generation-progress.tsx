@@ -39,7 +39,7 @@ export function GenerationProgress({ jobId, username }: GenerationProgressProps)
         setJob(data)
 
         if (data.status === "completed") {
-          setTimeout(() => router.push("/dashboard"), 1500)
+          setTimeout(() => router.push("/dashboard/preview"), 1500)
         }
         if (data.status === "failed") {
           setError(data.error ?? "Generation failed")

@@ -1,12 +1,15 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { motion, useScroll, useMotionValueEvent, useReducedMotion } from "motion/react";
 import Link from "next/link";
 import Image from "next/image";
 import { RippleButton } from "@/components/ui/ripple-button";
+import { BETA_MODE } from "@/lib/features";
 
 export function Nav() {
+  const router = useRouter();
   const { scrollY } = useScroll();
   const reduce = useReducedMotion();
   const [scrolled, setScrolled] = React.useState(false);
@@ -44,9 +47,11 @@ export function Nav() {
         {/* Nav links */}
         <div className="hidden md:flex items-center gap-5">
           {[
-            { label: "Features", href: "#features" },
-            { label: "How it works", href: "#how-it-works" },
-            { label: "Examples", href: "#portfolio" },
+            { label: "Features", href: "/#features" },
+            { label: "How it works", href: "/#how-it-works" },
+            { label: "Examples", href: "/#portfolio" },
+            { label: "Demo", href: "/#demo" },
+            { label: "Docs", href: "/docs" },
           ].map(({ label, href }) => (
             <Link
               key={label}
@@ -54,7 +59,7 @@ export function Nav() {
               className={`text-sm transition-colors duration-300 ${
                 scrolled
                   ? "text-muted-foreground hover:text-foreground"
-                  : "text-white/70 hover:text-white"
+                  : "text-zinc-700 hover:text-zinc-900 dark:text-white/70 dark:hover:text-white"
               }`}
             >
               {label}
@@ -64,14 +69,23 @@ export function Nav() {
 
         {/* Actions */}
         <div className="flex items-center gap-2 ml-auto md:ml-0">
-
-          <RippleButton
-            onClick={() => { window.location.hash = "waitlist"; }}
-            rippleColor="#ffffff40"
-            className="h-8 px-4 text-xs font-semibold rounded-full border-0 bg-foreground text-background hover:bg-foreground/90 active:scale-[0.97] transition-all"
-          >
-            Join waitlist
-          </RippleButton>
+          {BETA_MODE ? (
+            <RippleButton
+              onClick={() => router.push("/#waitlist")}
+              rippleColor="#ffffff40"
+              className="h-8 px-4 text-xs font-semibold rounded-full border-0 bg-foreground text-background hover:bg-foreground/90 active:scale-[0.97] transition-all"
+            >
+              Join waitlist
+            </RippleButton>
+          ) : (
+            <RippleButton
+              onClick={() => router.push("/login")}
+              rippleColor="#ffffff40"
+              className="h-8 px-4 text-xs font-semibold rounded-full border-0 bg-foreground text-background hover:bg-foreground/90 active:scale-[0.97] transition-all"
+            >
+              Get started
+            </RippleButton>
+          )}
         </div>
       </nav>
     </motion.header>
