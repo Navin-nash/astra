@@ -51,13 +51,13 @@ const steps = [
     number: "03",
     icon: PaperPlaneTilt,
     title: "Publish and share",
-    body: "Review the AI-generated write-ups, edit anything you want, then publish. Your portfolio is live at astra.build/u/you.",
+    body: "Review the AI-generated write-ups, edit anything you want, then publish. Your portfolio is live at useastra.tech/u/you.",
     image: "/images/steps/portfolio-live.png",
     imageAlt: "Live portfolio published",
     overlay: {
       title: "Portfolio live",
       items: [
-        { label: "Published successfully", done: true, detail: "useastra.qzz.io/you" },
+        { label: "Published successfully", done: true, detail: "useastra.tech/you" },
         { label: "Auto-sync enabled", done: true },
         { label: "Custom domain", done: false },
         { label: "Analytics", done: false },

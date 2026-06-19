@@ -44,9 +44,11 @@ export function Nav() {
         {/* Nav links */}
         <div className="hidden md:flex items-center gap-5">
           {[
-            { label: "Features", href: "#features" },
-            { label: "How it works", href: "#how-it-works" },
-            { label: "Examples", href: "#portfolio" },
+            { label: "Features", href: "/#features" },
+            { label: "How it works", href: "/#how-it-works" },
+            { label: "Examples", href: "/#portfolio" },
+            { label: "Demo", href: "/#demo" },
+            { label: "Docs", href: "/docs" },
           ].map(({ label, href }) => (
             <Link
               key={label}
@@ -66,7 +68,7 @@ export function Nav() {
         <div className="flex items-center gap-2 ml-auto md:ml-0">
 
           <RippleButton
-            onClick={() => { window.location.hash = "waitlist"; }}
+            onClick={() => { window.location.href = "/#waitlist"; }}
             rippleColor="#ffffff40"
             className="h-8 px-4 text-xs font-semibold rounded-full border-0 bg-foreground text-background hover:bg-foreground/90 active:scale-[0.97] transition-all"
           >

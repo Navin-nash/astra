@@ -55,6 +55,8 @@ export interface PortfolioData {
   theme_config: {
     template: TemplateId
     accent?: string
+    display_name?: string
+    contact_url?: string
   }
   last_synced_at: string | null
   repositories: PortfolioRepo[]

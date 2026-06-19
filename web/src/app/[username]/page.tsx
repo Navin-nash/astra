@@ -46,9 +46,12 @@ export default async function PortfolioPage({ params }: Props) {
     theme_config: {
       template: (raw.theme_config?.template as PortfolioData["theme_config"]["template"]) ?? "void",
       accent: raw.theme_config?.accent as string | undefined,
+      display_name: raw.theme_config?.display_name as string | undefined,
+      contact_url: raw.theme_config?.contact_url as string | undefined,
     },
     last_synced_at: raw.last_synced_at ?? null,
     repositories: (raw.repositories ?? []) as PortfolioData["repositories"],
+    github_profile: raw.github_profile ?? undefined,
   }
 
   return <PortfolioTemplate data={data} />

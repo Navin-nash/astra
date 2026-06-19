@@ -1,8 +1,11 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { MdxRenderer } from "../mdx-renderer"
 import type { PortfolioData, PortfolioRepo } from "@/types/portfolio"
+import type { EditCallbacks } from "@/app/dashboard/preview/preview-client"
+import { InlineEditable } from "@/components/portfolio/inline-editable"
 import {
   ContributionGraph,
   ContributionGraphBlock,
@@ -105,9 +108,24 @@ function HighlightedText({ text }: { text: string }) {
   )
 }
 
+function resolveContactHref(value: string): string {
+  const v = value.trim()
+  if (!v) return ""
+  if (v.startsWith("http://") || v.startsWith("https://")) return v
+  if (v.includes("@") && !v.includes(" ")) return `mailto:${v}`
+  return `https://${v}`
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export function MinimalTemplate({ data }: { data: PortfolioData }) {
+interface MinimalTemplateProps {
+  data: PortfolioData
+  editMode?: boolean
+  editCallbacks?: EditCallbacks
+}
+
+export function MinimalTemplate({ data, editMode = false, editCallbacks }: MinimalTemplateProps) {
+  const displayName = data.theme_config.display_name ?? data.username
   const totalStars = data.repositories.reduce((s, r) => s + r.stars_count, 0)
   const totalForks = data.repositories.reduce((s, r) => s + r.forks_count, 0)
   const languages = [...new Set(data.repositories.map(r => r.primary_language).filter(Boolean))] as string[]
@@ -115,8 +133,18 @@ export function MinimalTemplate({ data }: { data: PortfolioData }) {
   const about = extractAbout(data.mdx_content)
   const contributions = extractContributions(data.mdx_content)
   const langStats = getLanguageStats(data.repositories)
-  const activities = data.github_profile?.contribution_weeks?.length
-    ? data.github_profile.contribution_weeks.flatMap(w => w.days)
+  const [liveProfile, setLiveProfile] = useState(data.github_profile ?? null)
+
+  useEffect(() => {
+    if (editMode) return
+    fetch(`/api/contributions/${data.username}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(fresh => { if (fresh) setLiveProfile(fresh) })
+      .catch(() => {})
+  }, [data.username, editMode])
+
+  const activities = liveProfile?.contribution_weeks?.length
+    ? liveProfile.contribution_weeks.flatMap(w => w.days)
     : null
 
   return (
@@ -130,7 +158,7 @@ export function MinimalTemplate({ data }: { data: PortfolioData }) {
               <Image src={data.avatar_url} alt={data.username} width={32} height={32}
                 className="rounded-full border border-border shrink-0" />
             )}
-            <span className="font-bold text-sm tracking-tight">{data.username}</span>
+            <span className="font-bold text-sm tracking-tight">{displayName}</span>
           </div>
           <div className="flex items-center gap-5 text-xs text-muted-foreground">
             <a href="#work" className="hover:text-foreground transition-colors">Work</a>
@@ -145,13 +173,21 @@ export function MinimalTemplate({ data }: { data: PortfolioData }) {
 
         {/* ── Hero ──────────────────────────────────────────────────────────── */}
         <section className="pt-20 pb-16">
-          {/* Avatar (larger, for hero) */}
+          {/* Avatar + name */}
           {data.avatar_url && (
             <div className="mb-8 flex items-center gap-5">
               <Image src={data.avatar_url} alt={data.username} width={72} height={72}
                 className="rounded-2xl border border-border shadow-sm shrink-0" />
-              <div>
-                <h1 className="text-xl font-bold">{data.username}</h1>
+              <div className="flex-1 min-w-0">
+                <InlineEditable
+                  value={displayName}
+                  onSave={editCallbacks?.onNameSave ?? (() => {})}
+                  editMode={editMode}
+                  multiline={false}
+                  inputClassName="text-xl font-bold"
+                >
+                  <h1 className="text-xl font-bold">{displayName}</h1>
+                </InlineEditable>
                 <a href={`https://github.com/${data.username}`} target="_blank" rel="noopener noreferrer"
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors">
                   github.com/{data.username}
@@ -161,13 +197,30 @@ export function MinimalTemplate({ data }: { data: PortfolioData }) {
           )}
 
           {!data.avatar_url && (
-            <h1 className="text-3xl font-bold mb-6">{data.username}</h1>
+            <InlineEditable
+              value={displayName}
+              onSave={editCallbacks?.onNameSave ?? (() => {})}
+              editMode={editMode}
+              multiline={false}
+              wrapperClassName="mb-6"
+              inputClassName="text-3xl font-bold"
+            >
+              <h1 className="text-3xl font-bold mb-6">{displayName}</h1>
+            </InlineEditable>
           )}
 
           {/* Bio */}
-          <p className="text-xl sm:text-2xl leading-snug text-foreground font-medium mb-10" style={{ maxWidth: "42ch" }}>
-            <HighlightedText text={intro} />
-          </p>
+          <InlineEditable
+            value={intro}
+            onSave={editCallbacks?.onBioSave ?? (() => {})}
+            editMode={editMode}
+            multiline
+            wrapperClassName="mb-10"
+          >
+            <p className="text-xl sm:text-2xl leading-snug text-foreground font-medium mb-10" style={{ maxWidth: "42ch" }}>
+              <HighlightedText text={intro} />
+            </p>
+          </InlineEditable>
 
           {/* Stats chips */}
           <div className="flex flex-wrap gap-3 mb-8">
@@ -176,8 +229,8 @@ export function MinimalTemplate({ data }: { data: PortfolioData }) {
               { label: "Forks", value: totalForks.toLocaleString(), icon: "⑂" },
               { label: "Repos", value: data.repositories.length, icon: "⌥" },
               { label: "Languages", value: languages.length, icon: "◈" },
-              ...(data.github_profile?.followers != null
-                ? [{ label: "Followers", value: data.github_profile.followers.toLocaleString(), icon: "↑" }]
+              ...(liveProfile?.followers != null
+                ? [{ label: "Followers", value: liveProfile.followers.toLocaleString(), icon: "↑" }]
                 : []),
             ].map(({ label, value, icon }) => (
               <div key={label} className="flex items-center gap-2 rounded-full border border-border bg-muted/40 px-4 py-2">
@@ -189,9 +242,9 @@ export function MinimalTemplate({ data }: { data: PortfolioData }) {
           </div>
 
           {/* Language donut */}
-          {(data.github_profile?.language_bytes || langStats.length > 0) && (
+          {(liveProfile?.language_bytes || langStats.length > 0) && (
             <LanguageDonut
-              languageBytes={data.github_profile?.language_bytes ?? {}}
+              languageBytes={liveProfile?.language_bytes ?? {}}
               repoLanguages={data.repositories.map(r => r.primary_language).filter(Boolean) as string[]}
             />
           )}
@@ -205,9 +258,10 @@ export function MinimalTemplate({ data }: { data: PortfolioData }) {
                 Activity
               </h2>
               <div className="flex-1 h-px bg-border" />
-              {data.github_profile?.total_contributions != null && (
-                <span className="text-xs text-muted-foreground shrink-0">
-                  {data.github_profile.total_contributions.toLocaleString()} contributions
+              {liveProfile?.total_contributions != null && (
+                <span className="text-xs text-muted-foreground shrink-0 flex items-center gap-1.5">
+                  {liveProfile !== data.github_profile && <span className="w-1.5 h-1.5 rounded-full bg-green-500" />}
+                  {liveProfile.total_contributions.toLocaleString()} contributions
                 </span>
               )}
             </div>
@@ -217,10 +271,9 @@ export function MinimalTemplate({ data }: { data: PortfolioData }) {
               blockMargin={3}
               blockRadius={2}
               fontSize={10}
-              totalCount={data.github_profile?.total_contributions}
+              totalCount={liveProfile?.total_contributions}
               className="text-muted-foreground w-full max-w-full"
             >
-              {/* Scale the SVG to fill the container without a scrollbar */}
               <ContributionGraphCalendar className="overflow-hidden [&>svg]:w-full [&>svg]:h-auto">
                 {({ activity, dayIndex, weekIndex }) => (
                   <ContributionGraphBlock
@@ -269,7 +322,13 @@ export function MinimalTemplate({ data }: { data: PortfolioData }) {
 
           <div className="space-y-14">
             {data.repositories.map((repo, i) => (
-              <MinimalRepoCard key={repo.id} repo={repo} index={i} />
+              <MinimalRepoCard
+                key={repo.id}
+                repo={repo}
+                index={i}
+                editMode={editMode}
+                onProjectSave={editCallbacks?.onProjectSave}
+              />
             ))}
           </div>
         </section>
@@ -305,25 +364,57 @@ export function MinimalTemplate({ data }: { data: PortfolioData }) {
               <h2 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground shrink-0">About</h2>
               <div className="flex-1 h-px bg-border" />
             </div>
-            <div className="prose prose-neutral dark:prose-invert max-w-none text-muted-foreground leading-relaxed">
-              <MdxRenderer content={about} />
-            </div>
+            <InlineEditable
+              value={about}
+              onSave={editCallbacks?.onAboutSave ?? (() => {})}
+              editMode={editMode}
+              multiline
+            >
+              <div className="prose prose-neutral dark:prose-invert max-w-none text-muted-foreground leading-relaxed">
+                <MdxRenderer content={about} />
+              </div>
+            </InlineEditable>
           </section>
         )}
       </main>
 
       {/* ── Footer ──────────────────────────────────────────────────────────── */}
       <footer className="border-t border-border">
-        <div className="mx-auto max-w-3xl px-6 py-8 flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">
-            Generated by{" "}
-            <a href="/" className="text-brand hover:underline underline-offset-2">Astra</a>
-          </p>
-          {data.last_synced_at && (
-            <p className="text-xs text-muted-foreground">
-              Updated {new Date(data.last_synced_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+        <div className="mx-auto max-w-3xl px-6 py-12 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+          <div>
+            <p className="text-sm text-muted-foreground mb-1">
+              Generated by{" "}
+              <a href="/" className="text-brand hover:underline underline-offset-2">Astra</a>
             </p>
-          )}
+            {data.last_synced_at && (
+              <p className="text-xs text-muted-foreground">
+                Updated {new Date(data.last_synced_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+              </p>
+            )}
+          </div>
+          {editMode ? (
+            <InlineEditable
+              value={data.theme_config.contact_url ?? ""}
+              onSave={editCallbacks?.onContactSave ?? (() => {})}
+              editMode={editMode}
+              multiline={false}
+            >
+              <div className="inline-flex items-center gap-2 rounded-full border border-brand/40 px-6 py-2.5 text-sm font-medium text-brand cursor-pointer">
+                {data.theme_config.contact_url || "+ Add contact link"}
+              </div>
+            </InlineEditable>
+          ) : data.theme_config.contact_url ? (
+            <a
+              href={resolveContactHref(data.theme_config.contact_url)}
+              target={data.theme_config.contact_url.includes("@") && !data.theme_config.contact_url.startsWith("http") ? undefined : "_blank"}
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-full border border-brand/40 px-6 py-2.5 text-sm font-medium text-brand hover:bg-brand/5 transition-colors"
+            >
+              {data.theme_config.contact_url.includes("@") && !data.theme_config.contact_url.startsWith("http")
+                ? data.theme_config.contact_url
+                : "Get in touch ↗"}
+            </a>
+          ) : null}
         </div>
       </footer>
     </div>
@@ -332,7 +423,14 @@ export function MinimalTemplate({ data }: { data: PortfolioData }) {
 
 // ─── MinimalRepoCard ──────────────────────────────────────────────────────────
 
-function MinimalRepoCard({ repo, index }: { repo: PortfolioRepo; index: number }) {
+interface MinimalRepoCardProps {
+  repo: PortfolioRepo
+  index: number
+  editMode?: boolean
+  onProjectSave?: (repoId: string, newSummary: string) => void
+}
+
+function MinimalRepoCard({ repo, index, editMode = false, onProjectSave }: MinimalRepoCardProps) {
   const complexity = repo.ast_metadata?.complexity_score ?? 0
   const langColor = repo.primary_language ? (LANG_COLORS[repo.primary_language] ?? "#888") : "#888"
   const allTech = [
@@ -340,6 +438,7 @@ function MinimalRepoCard({ repo, index }: { repo: PortfolioRepo; index: number }
   ].slice(0, 6)
   const lastUpdated = new Date(repo.updated_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })
   const year = new Date(repo.created_at).getFullYear()
+  const currentSummary = repo.ai_summary ?? repo.description ?? ""
 
   return (
     <article>
@@ -371,9 +470,17 @@ function MinimalRepoCard({ repo, index }: { repo: PortfolioRepo; index: number }
         </div>
       </div>
 
-      {/* AI Summary */}
+      {/* AI Summary — inline editable */}
       {repo.ai_summary && (
-        <p className="text-sm text-muted-foreground leading-relaxed mb-4">{repo.ai_summary}</p>
+        <InlineEditable
+          value={currentSummary}
+          onSave={(v) => onProjectSave?.(repo.id, v)}
+          editMode={editMode}
+          multiline
+          wrapperClassName="mb-4"
+        >
+          <p className="text-sm text-muted-foreground leading-relaxed mb-4">{repo.ai_summary}</p>
+        </InlineEditable>
       )}
 
       {/* Stats row */}

@@ -1,10 +1,12 @@
 "use client"
 
 import type React from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { MdxRenderer } from "../mdx-renderer"
 import type { PortfolioData, PortfolioRepo, GithubProfile } from "@/types/portfolio"
 import type { EditCallbacks } from "@/app/dashboard/preview/preview-client"
+import { InlineEditable } from "@/components/portfolio/inline-editable"
 import {
   ContributionGraph,
   ContributionGraphBlock,
@@ -149,6 +151,14 @@ function HighlightedBio({ text }: { text: string }) {
   )
 }
 
+function resolveContactHref(value: string): string {
+  const v = value.trim()
+  if (!v) return ""
+  if (v.startsWith("http://") || v.startsWith("https://")) return v
+  if (v.includes("@") && !v.includes(" ")) return `mailto:${v}`
+  return `https://${v}`
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 interface VoidTemplateProps {
@@ -158,16 +168,26 @@ interface VoidTemplateProps {
 }
 
 export function VoidTemplate({ data, editMode = false, editCallbacks }: VoidTemplateProps) {
+  const displayName = data.theme_config.display_name ?? data.username
   const totalStars = data.repositories.reduce((s, r) => s + r.stars_count, 0)
   const totalForks = data.repositories.reduce((s, r) => s + r.forks_count, 0)
   const languages = [...new Set(data.repositories.map(r => r.primary_language).filter(Boolean))] as string[]
   const bio = extractBio(data.mdx_content)
   const about = extractAbout(data.mdx_content)
   const contributions = extractContributions(data.mdx_content)
-  const activities = data.github_profile?.contribution_weeks?.length
-    ? data.github_profile.contribution_weeks.flatMap(w => w.days)
+  const [liveProfile, setLiveProfile] = useState(data.github_profile ?? null)
+
+  useEffect(() => {
+    if (editMode) return
+    fetch(`/api/contributions/${data.username}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(fresh => { if (fresh) setLiveProfile(fresh) })
+      .catch(() => {})
+  }, [data.username, editMode])
+
+  const activities = liveProfile?.contribution_weeks?.length
+    ? liveProfile.contribution_weeks.flatMap(w => w.days)
     : (() => {
-        // Fall back to synthetic grid — convert to Activity[] for kibo-ui
         const grid = generateHeatmap(data.repositories, data.username)
         const now = new Date()
         return grid.flatMap((week, wi) =>
@@ -201,7 +221,7 @@ export function VoidTemplate({ data, editMode = false, editCallbacks }: VoidTemp
       <nav className="fixed top-4 left-1/2 z-50 -translate-x-1/2">
         <div className="flex items-center gap-5 rounded-full px-5 py-2.5 text-sm shadow-lg backdrop-blur-md"
           style={{ border: "1px solid var(--void-border)", background: "color-mix(in oklch, var(--void-elevated) 88%, transparent)" }}>
-          <span className="font-bold text-brand tracking-tight">{data.username}</span>
+          <span className="font-bold text-brand tracking-tight">{displayName}</span>
           <span className="text-muted-foreground/30">|</span>
           <a href="#projects" className="text-muted-foreground hover:text-foreground transition-colors text-xs uppercase tracking-widest">Projects</a>
           <a href="#activity" className="text-muted-foreground hover:text-foreground transition-colors text-xs uppercase tracking-widest">Activity</a>
@@ -233,18 +253,27 @@ export function VoidTemplate({ data, editMode = false, editCallbacks }: VoidTemp
 
             {/* Name + Bio */}
             <div className="space-y-5">
-              <h1 className="text-[clamp(3rem,8vw,6rem)] font-black leading-[0.95] tracking-[-0.04em]">
-                {data.username}
-              </h1>
-              <EditableSection
+              <InlineEditable
+                value={displayName}
+                onSave={editCallbacks?.onNameSave ?? (() => {})}
                 editMode={editMode}
-                label="Introduction"
-                onClick={() => editCallbacks?.onBioEdit(bio)}
+                multiline={false}
+                inputClassName="text-[clamp(3rem,8vw,6rem)] font-black leading-[0.95] tracking-[-0.04em] bg-transparent border-0 border-b-2 border-brand/50 rounded-none focus:ring-0 px-0 py-1"
+              >
+                <h1 className="text-[clamp(3rem,8vw,6rem)] font-black leading-[0.95] tracking-[-0.04em]">
+                  {displayName}
+                </h1>
+              </InlineEditable>
+              <InlineEditable
+                value={bio}
+                onSave={editCallbacks?.onBioSave ?? (() => {})}
+                editMode={editMode}
+                multiline
               >
                 <p className="text-lg sm:text-xl leading-relaxed max-w-2xl text-muted-foreground">
                   <HighlightedBio text={bio} />
                 </p>
-              </EditableSection>
+              </InlineEditable>
             </div>
 
             {/* Stats chips */}
@@ -255,8 +284,8 @@ export function VoidTemplate({ data, editMode = false, editCallbacks }: VoidTemp
                 { icon: "⑂", label: "Forks", value: totalForks.toLocaleString() },
                 { icon: "ƒ", label: "Functions", value: `${totalFns}+` },
                 { icon: "◈", label: "Languages", value: languages.length },
-                ...(data.github_profile?.followers != null
-                  ? [{ icon: "↑", label: "Followers", value: data.github_profile.followers.toLocaleString() }]
+                ...(liveProfile?.followers != null
+                  ? [{ icon: "↑", label: "Followers", value: liveProfile.followers.toLocaleString() }]
                   : []),
               ].map(({ icon, label, value }) => (
                 <div key={label} className="v-card rounded-xl px-4 py-3">
@@ -316,11 +345,11 @@ export function VoidTemplate({ data, editMode = false, editCallbacks }: VoidTemp
               </div>
 
               {/* Language donut */}
-              {(data.github_profile?.language_bytes || langStats.length > 0) && (
+              {(liveProfile?.language_bytes || langStats.length > 0) && (
                 <div className="w-full v-card rounded-2xl p-5 mt-4">
                   <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-4">Top Languages</p>
                   <LanguageDonut
-                    languageBytes={data.github_profile?.language_bytes ?? {}}
+                    languageBytes={liveProfile?.language_bytes ?? {}}
                     repoLanguages={data.repositories.map(r => r.primary_language).filter(Boolean) as string[]}
                     labelColor="var(--foreground)"
                     dimColor="var(--muted-foreground)"
@@ -340,11 +369,16 @@ export function VoidTemplate({ data, editMode = false, editCallbacks }: VoidTemp
             <p className="text-[11px] font-semibold uppercase tracking-widest mb-2 text-brand">Activity</p>
             <h2 className="text-2xl font-bold tracking-tight">Contribution History</h2>
           </div>
-          {data.last_synced_at && (
+          {liveProfile ? (
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+              Live
+            </p>
+          ) : data.last_synced_at ? (
             <p className="text-xs text-muted-foreground">
               Synced {new Date(data.last_synced_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
             </p>
-          )}
+          ) : null}
         </div>
         <div className="v-card rounded-2xl p-6 overflow-hidden">
           <ContributionGraph
@@ -353,7 +387,7 @@ export function VoidTemplate({ data, editMode = false, editCallbacks }: VoidTemp
             blockMargin={3}
             blockRadius={2}
             fontSize={10}
-            totalCount={data.github_profile?.total_contributions}
+            totalCount={liveProfile?.total_contributions}
             className="text-muted-foreground"
           >
             <ContributionGraphCalendar className="overflow-x-auto">
@@ -410,14 +444,14 @@ export function VoidTemplate({ data, editMode = false, editCallbacks }: VoidTemp
               key={repo.id}
               repo={repo}
               editMode={editMode}
-              onEdit={editCallbacks?.onProjectEdit}
+              onProjectSave={editCallbacks?.onProjectSave}
             />
           ))}
         </div>
       </section>
 
       {/* ── Language Breakdown (mobile) ────────────────────────────────────────── */}
-      {(data.github_profile?.language_bytes || langStats.length > 0) && (
+      {(liveProfile?.language_bytes || langStats.length > 0) && (
         <section className="lg:hidden mx-auto max-w-7xl px-6 py-20"
           style={{ borderTop: "1px solid var(--void-border)" }}>
           <div className="mb-8">
@@ -426,7 +460,7 @@ export function VoidTemplate({ data, editMode = false, editCallbacks }: VoidTemp
           </div>
           <div className="v-card rounded-2xl p-6">
             <LanguageDonut
-              languageBytes={data.github_profile?.language_bytes ?? {}}
+              languageBytes={liveProfile?.language_bytes ?? {}}
               repoLanguages={data.repositories.map(r => r.primary_language).filter(Boolean) as string[]}
               labelColor="var(--foreground)"
               dimColor="var(--muted-foreground)"
@@ -464,15 +498,16 @@ export function VoidTemplate({ data, editMode = false, editCallbacks }: VoidTemp
             <p className="text-[11px] font-semibold uppercase tracking-widest mb-2 text-brand">Bio</p>
             <h2 className="text-2xl font-bold tracking-tight">About</h2>
           </div>
-          <EditableSection
+          <InlineEditable
+            value={about}
+            onSave={editCallbacks?.onAboutSave ?? (() => {})}
             editMode={editMode}
-            label="About"
-            onClick={() => editCallbacks?.onAboutEdit(about)}
+            multiline
           >
             <div className="max-w-2xl prose max-w-none text-muted-foreground leading-relaxed">
               <MdxRenderer content={about} />
             </div>
-          </EditableSection>
+          </InlineEditable>
         </section>
       )}
 
@@ -492,41 +527,45 @@ export function VoidTemplate({ data, editMode = false, editCallbacks }: VoidTemp
               )}
             </p>
           </div>
-          <a href={`https://github.com/${data.username}`} target="_blank" rel="noopener noreferrer"
-            className="shrink-0 rounded-full px-8 py-3.5 text-sm font-bold transition-all hover:scale-[1.03] active:scale-[0.98]"
-            style={{ background: "var(--brand)", color: "#fff" }}>
-            Get in touch ↗
-          </a>
+          <div className="shrink-0">
+            {editMode ? (
+              <InlineEditable
+                value={data.theme_config.contact_url ?? ""}
+                onSave={editCallbacks?.onContactSave ?? (() => {})}
+                editMode={editMode}
+                multiline={false}
+                inputClassName="rounded-full px-8 py-3.5 text-sm font-bold"
+              >
+                <div className="inline-flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-bold text-white" style={{ background: "var(--brand)" }}>
+                  {data.theme_config.contact_url
+                    ? (data.theme_config.contact_url.includes("@") && !data.theme_config.contact_url.startsWith("http"))
+                      ? data.theme_config.contact_url
+                      : "Get in touch ↗"
+                    : <span className="opacity-70">+ Add contact link</span>}
+                </div>
+              </InlineEditable>
+            ) : data.theme_config.contact_url ? (
+              <a
+                href={resolveContactHref(data.theme_config.contact_url)}
+                target={data.theme_config.contact_url.includes("@") && !data.theme_config.contact_url.startsWith("http") ? undefined : "_blank"}
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-bold transition-all hover:scale-[1.03] active:scale-[0.98] text-white"
+                style={{ background: "var(--brand)" }}
+              >
+                {data.theme_config.contact_url.includes("@") && !data.theme_config.contact_url.startsWith("http")
+                  ? data.theme_config.contact_url
+                  : "Get in touch ↗"}
+              </a>
+            ) : (
+              <a href={`https://github.com/${data.username}`} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-bold transition-all hover:scale-[1.03] active:scale-[0.98] text-white"
+                style={{ background: "var(--brand)" }}>
+                Get in touch ↗
+              </a>
+            )}
+          </div>
         </div>
       </footer>
-    </div>
-  )
-}
-
-// ─── EditableSection ─────────────────────────────────────────────────────────
-
-function EditableSection({
-  editMode,
-  label,
-  onClick,
-  children,
-}: {
-  editMode: boolean
-  label: string
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  if (!editMode) return <>{children}</>
-  return (
-    <div
-      className="relative group cursor-pointer rounded-xl"
-      onClick={onClick}
-    >
-      {children}
-      <div className="absolute inset-0 rounded-xl border-2 border-dashed border-brand/30 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-      <span className="absolute top-2 right-2 text-[10px] uppercase tracking-widest text-brand bg-background/90 border border-brand/20 px-2 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-        Edit ✎
-      </span>
     </div>
   )
 }
@@ -536,30 +575,20 @@ function EditableSection({
 interface VoidProjectCardProps {
   repo: PortfolioRepo
   editMode?: boolean
-  onEdit?: (repoId: string, currentSummary: string) => void
+  onProjectSave?: (repoId: string, newSummary: string) => void
 }
 
-function VoidProjectCard({ repo, editMode = false, onEdit }: VoidProjectCardProps) {
+function VoidProjectCard({ repo, editMode = false, onProjectSave }: VoidProjectCardProps) {
   const complexity = repo.ast_metadata?.complexity_score ?? 0
   const langColor = repo.primary_language ? (LANG_COLORS[repo.primary_language] ?? "#888") : "#888"
-  // Use only frameworks — imports include noise like 'button', 'lucide-react', etc.
   const allTech = [...new Set(repo.ast_metadata?.frameworks ?? [])].slice(0, 5)
-
   const currentSummary = repo.ai_summary ?? repo.description ?? ""
 
   return (
     <article
-      className={`v-card rounded-2xl p-6 flex flex-col gap-4 transition-all ${
-        editMode ? "cursor-pointer hover:ring-2 hover:ring-brand/40 relative" : ""
-      }`}
-      onClick={editMode ? () => onEdit?.(repo.id, currentSummary) : undefined}
+      className="v-card rounded-2xl p-6 flex flex-col gap-4 transition-all"
       style={{ transition: "border-color 0.15s, box-shadow 0.15s" }}
     >
-      {editMode && (
-        <span className="absolute top-3 right-3 text-[10px] uppercase tracking-widest text-brand bg-brand/10 px-2 py-0.5 rounded-full border border-brand/20">
-          Edit ✎
-        </span>
-      )}
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
@@ -593,9 +622,16 @@ function VoidProjectCard({ repo, editMode = false, onEdit }: VoidProjectCardProp
         <p className="text-sm text-muted-foreground leading-snug">{repo.description}</p>
       )}
 
-      {/* AI Summary */}
+      {/* AI Summary — inline editable */}
       {repo.ai_summary && (
-        <p className="text-sm text-muted-foreground/80 leading-relaxed flex-1">{repo.ai_summary}</p>
+        <InlineEditable
+          value={currentSummary}
+          onSave={(v) => onProjectSave?.(repo.id, v)}
+          editMode={editMode}
+          multiline
+        >
+          <p className="text-sm text-muted-foreground/80 leading-relaxed flex-1">{repo.ai_summary}</p>
+        </InlineEditable>
       )}
 
       {/* Tech stack */}

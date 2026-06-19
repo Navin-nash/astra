@@ -1,8 +1,11 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { MdxRenderer } from "../mdx-renderer"
 import type { PortfolioData, PortfolioRepo } from "@/types/portfolio"
+import type { EditCallbacks } from "@/app/dashboard/preview/preview-client"
+import { InlineEditable } from "@/components/portfolio/inline-editable"
 import {
   ContributionGraph,
   ContributionGraphBlock,
@@ -115,6 +118,14 @@ function extractContributions(mdx: string) {
   return results.slice(0, 4)
 }
 
+function resolveContactHref(value: string): string {
+  const v = value.trim()
+  if (!v) return ""
+  if (v.startsWith("http://") || v.startsWith("https://")) return v
+  if (v.includes("@") && !v.includes(" ")) return `mailto:${v}`
+  return `https://${v}`
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function Prompt({ cmd }: { cmd: string }) {
@@ -145,7 +156,13 @@ function BlockHeader({ children }: { children: React.ReactNode }) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export function TerminalTemplate({ data }: { data: PortfolioData }) {
+interface TerminalTemplateProps {
+  data: PortfolioData
+  editMode?: boolean
+  editCallbacks?: EditCallbacks
+}
+
+export function TerminalTemplate({ data, editMode = false, editCallbacks }: TerminalTemplateProps) {
   const totalStars = data.repositories.reduce((s, r) => s + r.stars_count, 0)
   const totalForks = data.repositories.reduce((s, r) => s + r.forks_count, 0)
   const languages = [...new Set(data.repositories.map(r => r.primary_language).filter(Boolean))] as string[]
@@ -154,9 +171,19 @@ export function TerminalTemplate({ data }: { data: PortfolioData }) {
   const contributions = extractContributions(data.mdx_content)
   const langStats = getLanguageStats(data.repositories)
   const allTechs = getAllTechs(data.repositories)
-  const activity = data.github_profile?.contribution_weeks?.length
+  const [liveProfile, setLiveProfile] = useState(data.github_profile ?? null)
+
+  useEffect(() => {
+    if (editMode) return
+    fetch(`/api/contributions/${data.username}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(fresh => { if (fresh) setLiveProfile(fresh) })
+      .catch(() => {})
+  }, [data.username, editMode])
+
+  const activity = liveProfile?.contribution_weeks?.length
     ? (() => {
-        const weeks = data.github_profile!.contribution_weeks
+        const weeks = liveProfile!.contribution_weeks
         const now = new Date()
         return Array.from({ length: 12 }, (_, i) => {
           const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1)
@@ -173,8 +200,8 @@ export function TerminalTemplate({ data }: { data: PortfolioData }) {
       })()
     : getMonthlyActivity(data.repositories, data.username)
   const joined = data.repositories[0] ? new Date(data.repositories[0].created_at).getFullYear() : new Date().getFullYear()
-  const graphActivities = data.github_profile?.contribution_weeks?.length
-    ? data.github_profile.contribution_weeks.flatMap(w => w.days)
+  const graphActivities = liveProfile?.contribution_weeks?.length
+    ? liveProfile.contribution_weeks.flatMap(w => w.days)
     : null
 
   return (
@@ -259,11 +286,11 @@ export function TerminalTemplate({ data }: { data: PortfolioData }) {
                     ["stars", totalStars.toLocaleString()],
                     ["forks", totalForks.toLocaleString()],
                     ["repos", String(data.repositories.length)],
-                    ...(data.github_profile?.followers != null
-                      ? [["followers", data.github_profile.followers.toLocaleString()]]
+                    ...(liveProfile?.followers != null
+                      ? [["followers", liveProfile.followers.toLocaleString()]]
                       : []),
-                    ...(data.github_profile?.total_contributions != null
-                      ? [["contributions", data.github_profile.total_contributions.toLocaleString()]]
+                    ...(liveProfile?.total_contributions != null
+                      ? [["contributions", liveProfile.total_contributions.toLocaleString()]]
                       : []),
                     ["languages", languages.join(", ")],
                   ].map(([k, v]) => (
@@ -273,9 +300,17 @@ export function TerminalTemplate({ data }: { data: PortfolioData }) {
                     </div>
                   ))}
                 </div>
-                <p className="text-xs leading-relaxed" style={{ color: "var(--term-fg)", maxWidth: "60ch" }}>
-                  {intro}
-                </p>
+                <InlineEditable
+                  value={intro}
+                  onSave={editCallbacks?.onBioSave ?? (() => {})}
+                  editMode={editMode}
+                  multiline
+                  inputClassName="text-xs"
+                >
+                  <p className="text-xs leading-relaxed" style={{ color: "var(--term-fg)", maxWidth: "60ch" }}>
+                    {intro}
+                  </p>
+                </InlineEditable>
               </div>
             </div>
           </div>
@@ -287,7 +322,7 @@ export function TerminalTemplate({ data }: { data: PortfolioData }) {
           <BlockHeader>language breakdown · {data.repositories.length} repositories</BlockHeader>
           <div className="p-5">
             <LanguageDonut
-              languageBytes={data.github_profile?.language_bytes ?? {}}
+              languageBytes={liveProfile?.language_bytes ?? {}}
               repoLanguages={data.repositories.map(r => r.primary_language).filter(Boolean) as string[]}
               labelColor="var(--term-bright)"
               dimColor="var(--term-dim)"
@@ -318,7 +353,7 @@ export function TerminalTemplate({ data }: { data: PortfolioData }) {
         {/* ── Activity ───────────────────────────────────────────────────────── */}
         <Prompt cmd="git log --activity --contributions" />
         <Block>
-          <BlockHeader>contribution activity</BlockHeader>
+          <BlockHeader>contribution activity{liveProfile ? <span style={{ color: "var(--term-green)", marginLeft: "1ch" }}>● live</span> : ""}</BlockHeader>
           <div className="p-5">
             {graphActivities ? (
               <ContributionGraph
@@ -327,7 +362,7 @@ export function TerminalTemplate({ data }: { data: PortfolioData }) {
                 blockMargin={3}
                 blockRadius={2}
                 fontSize={10}
-                totalCount={data.github_profile?.total_contributions}
+                totalCount={liveProfile?.total_contributions}
                 className="w-full"
                 style={{ color: "var(--term-dim)" }}
               >
@@ -396,7 +431,12 @@ export function TerminalTemplate({ data }: { data: PortfolioData }) {
         <Prompt cmd={`ls -la ./projects/  # ${data.repositories.length} found`} />
         <div className="space-y-3 mb-2">
           {data.repositories.map(repo => (
-            <TerminalRepoBlock key={repo.id} repo={repo} />
+            <TerminalRepoBlock
+              key={repo.id}
+              repo={repo}
+              editMode={editMode}
+              onProjectSave={editCallbacks?.onProjectSave}
+            />
           ))}
         </div>
 
@@ -431,14 +471,53 @@ export function TerminalTemplate({ data }: { data: PortfolioData }) {
             <Prompt cmd="cat ./about.md" />
             <Block>
               <div className="p-5 text-xs leading-relaxed" style={{ color: "var(--term-fg)" }}>
-                <MdxRenderer content={about} />
+                <InlineEditable
+                  value={about}
+                  onSave={editCallbacks?.onAboutSave ?? (() => {})}
+                  editMode={editMode}
+                  multiline
+                  inputClassName="text-xs"
+                >
+                  <MdxRenderer content={about} />
+                </InlineEditable>
               </div>
             </Block>
           </>
         )}
 
         {/* ── Footer prompt ────────────────────────────────────────────────────── */}
-        <div className="pt-4 pb-8">
+        <div className="pt-4 pb-8 space-y-2">
+          {editMode ? (
+            <div className="flex items-center gap-2">
+              <span style={{ color: "var(--term-green)" }}>❯</span>
+              <span className="text-xs" style={{ color: "var(--term-dim)" }}>contact:</span>
+              <InlineEditable
+                value={data.theme_config.contact_url ?? ""}
+                onSave={editCallbacks?.onContactSave ?? (() => {})}
+                editMode={editMode}
+                multiline={false}
+                inputClassName="text-xs bg-transparent"
+              >
+                <span className="text-xs" style={{ color: "var(--term-green)" }}>
+                  {data.theme_config.contact_url || <span style={{ opacity: 0.5 }}>+ add contact link</span>}
+                </span>
+              </InlineEditable>
+            </div>
+          ) : data.theme_config.contact_url ? (
+            <div className="flex items-center gap-2">
+              <span style={{ color: "var(--term-green)" }}>❯</span>
+              <span className="text-xs" style={{ color: "var(--term-dim)" }}>contact:</span>
+              <a
+                href={resolveContactHref(data.theme_config.contact_url)}
+                target={data.theme_config.contact_url.includes("@") && !data.theme_config.contact_url.startsWith("http") ? undefined : "_blank"}
+                rel="noopener noreferrer"
+                className="text-xs hover:underline underline-offset-2"
+                style={{ color: "var(--term-green)" }}
+              >
+                {data.theme_config.contact_url}
+              </a>
+            </div>
+          ) : null}
           <div className="flex items-center gap-2 text-xs" style={{ color: "var(--term-dim)" }}>
             <span style={{ color: "var(--term-green)" }}>❯</span>
             <span>
@@ -449,7 +528,7 @@ export function TerminalTemplate({ data }: { data: PortfolioData }) {
               )}
             </span>
           </div>
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center gap-2">
             <span style={{ color: "var(--term-green)" }}>❯</span>
             <span className="animate-pulse text-xs" style={{ color: "var(--term-green)" }}>█</span>
           </div>
@@ -461,7 +540,13 @@ export function TerminalTemplate({ data }: { data: PortfolioData }) {
 
 // ─── TerminalRepoBlock ────────────────────────────────────────────────────────
 
-function TerminalRepoBlock({ repo }: { repo: PortfolioRepo }) {
+interface TerminalRepoBlockProps {
+  repo: PortfolioRepo
+  editMode?: boolean
+  onProjectSave?: (repoId: string, newSummary: string) => void
+}
+
+function TerminalRepoBlock({ repo, editMode = false, onProjectSave }: TerminalRepoBlockProps) {
   const complexity = repo.ast_metadata?.complexity_score ?? 0
   const lastUpdated = new Date(repo.updated_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })
   const year = new Date(repo.created_at).getFullYear()
@@ -512,7 +597,15 @@ function TerminalRepoBlock({ repo }: { repo: PortfolioRepo }) {
       {/* Body */}
       <div className="px-4 py-4 space-y-3" style={{ background: "var(--term-card)" }}>
         {repo.ai_summary && (
-          <p className="text-xs leading-relaxed" style={{ color: "var(--term-fg)" }}>{repo.ai_summary}</p>
+          <InlineEditable
+            value={repo.ai_summary}
+            onSave={(v) => onProjectSave?.(repo.id, v)}
+            editMode={editMode}
+            multiline
+            inputClassName="text-xs"
+          >
+            <p className="text-xs leading-relaxed" style={{ color: "var(--term-fg)" }}>{repo.ai_summary}</p>
+          </InlineEditable>
         )}
 
         {/* Key-value pairs */}

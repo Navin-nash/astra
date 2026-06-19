@@ -1,4 +1,3 @@
-import LogoIcon from '@/assets/logo-icon';
 import { motion, type Variants } from 'motion/react';
 import {
   FaFacebookF,
@@ -47,7 +46,6 @@ const defaultColumns: Footer16Column[] = [
     title: 'Resources',
     links: [
       { label: 'Documentation', href: '/docs' },
-      { label: 'GitHub', href: 'https://github.com/Navin-nash' },
       { label: 'About the Builder', href: 'https://navinraj.dev' },
     ],
   },
@@ -201,7 +199,11 @@ export function Footer16({
                 className="group inline-flex min-h-10 items-start gap-2 text-zinc-50 transition-[opacity,transform] duration-200 ease-out hover:opacity-85 active:scale-[0.96]"
                 aria-label={`${brandName} home`}
               >
-                <LogoIcon className="h-32 w-auto" />
+                <span className="flex items-center gap-2.5">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/favicon.svg" alt="" aria-hidden className="h-9 w-9 shrink-0" />
+                    <span className="text-2xl font-black tracking-tight text-zinc-50">Astra</span>
+                  </span>
               </a> 
               <p className="text-md max-w-lg leading-relaxed font-normal text-pretty whitespace-pre-line text-zinc-300/78 sm:text-sm">
                 {tagline}
@@ -259,7 +261,7 @@ export function Footer16({
               {copyright}
             </p>
 
-            <div className="flex flex-col sm:items-end">
+            {/* <div className="flex flex-col sm:items-end">
               <motion.ul
                 variants={listVariants}
                 className="flex items-center gap-1 sm:justify-end"
@@ -297,7 +299,7 @@ export function Footer16({
                   </motion.li>
                 ))}
               </motion.ul>
-            </div>
+            </div> */}
           </motion.div>
         </div>
       </motion.div>

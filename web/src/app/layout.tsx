@@ -52,7 +52,7 @@ export default function RootLayout({
       <TooltipProvider>
         <ThemeProvider
           attribute="class"
-          defaultTheme="light"
+          defaultTheme="dark"
           enableSystem
           >
           {children}
