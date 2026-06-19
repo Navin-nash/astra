@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { motion, type Variants } from 'motion/react';
 import {
   FaFacebookF,
@@ -194,8 +195,8 @@ export function Footer16({
         <div className="relative z-10 border-t border-white/10 bg-black/1 px-4 pt-9 pb-7 shadow-[0_-24px_80px_rgba(9,10,14,0.34)] backdrop-blur-xs sm:px-12 sm:pt-11 sm:pb-8 lg:pt-[46px]">
           <div className="grid gap-10 lg:grid-cols-[minmax(220px,1fr)_minmax(520px,0.98fr)] lg:gap-x-20">
             <motion.div variants={riseVariants} className="max-w-2xl">
-              <a
-                href="#"
+              <Link
+                href="/"
                 className="group inline-flex min-h-10 items-start gap-2 text-zinc-50 transition-[opacity,transform] duration-200 ease-out hover:opacity-85 active:scale-[0.96]"
                 aria-label={`${brandName} home`}
               >
@@ -204,7 +205,7 @@ export function Footer16({
                     <img src="/favicon.svg" alt="" aria-hidden className="h-9 w-9 shrink-0" />
                     <span className="text-2xl font-black tracking-tight text-zinc-50">Astra</span>
                   </span>
-              </a> 
+              </Link>
               <p className="text-md max-w-lg leading-relaxed font-normal text-pretty whitespace-pre-line text-zinc-300/78 sm:text-sm">
                 {tagline}
               </p>
@@ -226,25 +227,34 @@ export function Footer16({
                   >
                     {column.links.map((link) => (
                       <motion.li variants={linkVariants} key={link.label}>
-                        <a
-                          href={link.href}
-                          className="inline-flex min-h-5 items-center gap-2 text-sm leading-tight font-light text-zinc-300/70 transition-colors duration-200 ease-out hover:text-zinc-50"
-                          target={link.href.startsWith('http') ? '_blank' : undefined}
-                          rel={link.href.startsWith('http') ? 'noopener noreferrer' : undefined}
-                        >
-                          {link.imageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={link.imageUrl}
-                              alt={link.label}
-                              width={72}
-                              height={20}
-                              className="h-5 w-auto brightness-75 hover:brightness-100 transition-[filter] duration-200"
-                            />
-                          ) : (
-                            link.label
-                          )}
-                        </a>
+                        {link.href.startsWith('http') ? (
+                          <a
+                            href={link.href}
+                            className="inline-flex min-h-5 items-center gap-2 text-sm leading-tight font-light text-zinc-300/70 transition-colors duration-200 ease-out hover:text-zinc-50"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {link.imageUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={link.imageUrl}
+                                alt={link.label}
+                                width={72}
+                                height={20}
+                                className="h-5 w-auto brightness-75 hover:brightness-100 transition-[filter] duration-200"
+                              />
+                            ) : (
+                              link.label
+                            )}
+                          </a>
+                        ) : (
+                          <Link
+                            href={link.href}
+                            className="inline-flex min-h-5 items-center gap-2 text-sm leading-tight font-light text-zinc-300/70 transition-colors duration-200 ease-out hover:text-zinc-50"
+                          >
+                            {link.label}
+                          </Link>
+                        )}
                       </motion.li>
                     ))}
                   </motion.ul>
