@@ -5,8 +5,10 @@ import { HowItWorks } from "@/components/home/how-it-works";
 import { PortfolioGallery } from "@/components/home/portfolio-gallery";
 import { DemoSection } from "@/components/home/demo-section";
 import { WaitlistSection } from "@/components/home/waitlist-section";
+import { SignupCtaSection } from "@/components/home/signup-cta-section";
 import { ContactSection } from "@/components/home/contact-section";
 import { Footer } from "@/components/layout/footer";
+import { BETA_MODE } from "@/lib/features";
 
 export default function Home() {
   return (
@@ -18,7 +20,7 @@ export default function Home() {
         <HowItWorks />
         <PortfolioGallery />
         <DemoSection />
-        <WaitlistSection />
+        {BETA_MODE ? <WaitlistSection /> : <SignupCtaSection />}
         <ContactSection />
       </main>
       <Footer />
