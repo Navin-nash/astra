@@ -1,6 +1,8 @@
 import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { nextCookies } from "better-auth/next-js"
+import { dash } from "@better-auth/infra";
+import { sentinel } from "@better-auth/infra";
 import { db } from "./db"
 import * as authSchema from "./auth-schema"
 import { sendWelcomeEmail } from "./email"
@@ -16,7 +18,7 @@ export const auth = betterAuth({
     schema: authSchema,
   }),
 
-  plugins: [nextCookies()],
+  plugins: [dash(), sentinel(), nextCookies()],
 
   // ─── Social providers ─────────────────────────────────────────────────────
   socialProviders: {

@@ -15,6 +15,8 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "github.com" },
     ],
   },
+  allowedDevOrigins: [
+    "share-imagine-ongoing-tar.trycloudflare.com"
+  ]
 }
-
 export default nextConfig
