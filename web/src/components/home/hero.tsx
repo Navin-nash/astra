@@ -4,12 +4,9 @@ import Link from 'next/link';
 import { motion, useReducedMotion } from 'motion/react';
 import { ArrowRight } from '@phosphor-icons/react';
 import { WordRotate } from '@/components/ui/word-rotate';
-import { VideoText } from '@/components/ui/video-text';
 import { Button } from '@/components/ui/button';
 import { BETA_MODE } from '@/lib/features';
-
-const DEMO_VIDEO =
-  'https://res.cloudinary.com/dtqadlaim/video/upload/v1781593121/hero_catr9o.mp4';
+import { TextFlip } from '@/components/text-flip';
 
 const ROLES = [
   'full-stack engineers',
@@ -17,6 +14,13 @@ const ROLES = [
   'systems builders',
   'backend developers',
   'open-source contributors',
+];
+
+const TAGLINES = [
+  'as a portfolio.',
+  'as a showcase.',
+  'as a story.',
+  'ready in 60 seconds.',
 ];
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
@@ -31,9 +35,7 @@ const fadeUp = {
   show: { opacity: 1, y: 0, transition: { duration: 0.8, ease: EASE } },
 };
 
-// font-size for each line; container must be ~2.3× taller to fit two lines
 const HEADLINE_FS = 'clamp(3rem, 11vw, 160px)';
-const HEADLINE_H  = 'clamp(6.8rem, 26vw, 380px)';
 
 export function Hero() {
   const reduce = useReducedMotion();
@@ -94,22 +96,25 @@ export function Hero() {
         className="relative z-10 flex-1 flex flex-col px-6 pt-36 md:px-12 lg:px-20 md:pt-32"
       >
 
-        {/* VideoText: video plays through both headline lines */}
+        {/* Animated hello + headline */}
         <motion.div variants={reduce ? undefined : fadeUp} className="w-full">
-          <div style={{ height: HEADLINE_H, width: '100%' }}>
-            <VideoText
-              src={DEMO_VIDEO}
-              fontSize={11}
-              fontWeight="900"
-              fontFamily="var(--font-satoshi)"
-              autoPlay
-              muted
-              loop
-              preload="auto"
+          <h1
+            className="font-black leading-[0.9] tracking-tight text-foreground"
+            style={{ fontSize: HEADLINE_FS }}
+          >
+            Your GitHub,
+            <br />
+            <TextFlip
+              as={motion.span}
+              interval={3}
+              className="block"
+              transition={{ duration: 0.35 }}
             >
-              {`Your GitHub,\nas a portfolio.`}
-            </VideoText>
-          </div>
+              {TAGLINES.map((t) => (
+                <span key={t}>{t}</span>
+              ))}
+            </TextFlip>
+          </h1>
         </motion.div>
 
         {/* CTAs — right below the headline */}
